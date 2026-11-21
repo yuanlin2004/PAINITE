@@ -115,16 +115,18 @@ def _token(args, settings: Settings) -> int:
     try:
         if args.tcmd == "create":
             try:
-                tok, secret = store.create_token(args.name)
+                _, secret = store.create_token(args.name)
             except ValueError as e:
                 print(f"error: {e}", file=sys.stderr)
                 return 1
             print(secret)
-            print(f"Created token {args.name!r} ({tok.id}). It is shown only once.", file=sys.stderr)
+            print(f"Created token {args.name!r}. The line above (starting with pnt_) is the secret: give it to\n"
+                  f"the client, e.g. `painite config set token {secret[:8]}…`. It is shown only once and\n"
+                  "cannot be recovered; create a new token if it is lost.", file=sys.stderr)
         elif args.tcmd == "list":
             for t in store.list_tokens():
                 created = datetime.fromtimestamp(t.created_at, tz=timezone.utc).strftime("%Y-%m-%d %H:%M")
-                print(f"{t.name}\t{t.id}\t{created}Z\t{'revoked' if t.revoked_at else 'active'}")
+                print(f"{t.name}\t{created}Z\t{'revoked' if t.revoked_at else 'active'}\tid {t.id} (not a secret)")
         elif args.tcmd == "revoke":
             if not store.revoke_token(args.name):
                 print(f"error: no active token named {args.name!r}", file=sys.stderr)

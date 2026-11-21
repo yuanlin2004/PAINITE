@@ -18,7 +18,7 @@ cd server
 python3 -m venv .venv && . .venv/bin/activate
 pip install -e '.[test]'
 export PAINITE_DATA_DIR=$PWD/.data
-painite-server token create --name dev      # prints the token once
+painite-server token create --name dev      # prints the pnt_… secret once (stdout)
 painite-server serve --port 8443
 ```
 
@@ -33,7 +33,7 @@ alias ps-admin='docker run --rm -v /var/lib/painite:/var/lib/painite painite-ser
 ps-admin admin init --hostname spark1 --hostname spark1.local --ip 192.168.29.160
 #   prints the CA fingerprint; on each client: painite trust --fingerprint SHA256:...
 
-ps-admin token create --name studio-mac      # prints the token once
+ps-admin token create --name studio-mac      # prints the pnt_… secret once (stdout)
 
 sudo cp server/deploy/painite-server.service /etc/systemd/system/
 sudo systemctl daemon-reload && sudo systemctl enable --now painite-server

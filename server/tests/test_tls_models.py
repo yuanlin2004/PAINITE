@@ -127,3 +127,10 @@ def test_registry_loads_installed_models_and_defaults(tmp_path):
 def test_catalog_is_valid():
     for m in mf.catalog().values():
         assert m.files, m.id
+
+
+def test_token_create_output(tmp_path, capsys):
+    assert main(["--data-dir", str(tmp_path / "d"), "token", "create", "--name", "mac"]) == 0
+    out = capsys.readouterr()
+    assert out.out.strip().startswith("pnt_")
+    assert "tok_" not in out.err and "pnt_" in out.err

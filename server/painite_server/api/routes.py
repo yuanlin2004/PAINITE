@@ -34,7 +34,11 @@ CONTENT_TYPES = {"jpeg": "image/jpeg", "tiff": "image/tiff"}
 def current_owner(request: Request, authorization: Annotated[str | None, Header()] = None) -> str:
     if not authorization or not authorization.lower().startswith("bearer "):
         raise ApiError(401, "unauthorized", "missing bearer token")
-    owner = request.app.state.store.owner_for_token(authorization[7:].strip())
+    presented = authorization[7:].strip()
+    owner = request.app.state.store.owner_for_token(presented)
+    if owner is None and presented.startswith("tok_"):
+        raise ApiError(401, "unauthorized",
+                       "that is a token id, not the token; use the pnt_ secret printed by `token create`")
     if owner is None:
         raise ApiError(401, "unauthorized", "invalid or revoked token")
     return owner
