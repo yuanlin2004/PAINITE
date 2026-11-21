@@ -214,6 +214,10 @@ func (r *runner) download(ctx context.Context, job *api.Job, dest string) error 
 	if want != "" && hex.EncodeToString(h.Sum(nil)) != want {
 		return &api.Error{Code: "download_corrupt", Message: "downloaded result does not match the server's checksum"}
 	}
+	// CreateTemp makes 0600 files; results are ordinary images.
+	if err := tmp.Chmod(0o644); err != nil {
+		return &api.Error{Code: "write_failed", Message: err.Error()}
+	}
 	if err := tmp.Sync(); err != nil {
 		return &api.Error{Code: "write_failed", Message: err.Error()}
 	}

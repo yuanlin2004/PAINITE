@@ -45,6 +45,7 @@ def main(argv: list[str] | None = None) -> int:
         from .app import create_app
 
         logging.basicConfig(level=args.log_level.upper(), format="%(asctime)s %(levelname)s %(name)s %(message)s")
+        logging.getLogger("pyvips").setLevel(logging.WARNING)
         if not args.tls_cert:
             logging.getLogger("painite").warning("TLS is off: serving plain HTTP. Use only on a trusted network.")
         uvicorn.run(create_app(settings), host=args.host, port=args.port, ssl_certfile=args.tls_cert,

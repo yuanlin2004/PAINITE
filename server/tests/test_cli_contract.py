@@ -64,6 +64,7 @@ def test_single_file(cli_bin, server, tmp_path):
     assert [x["status"] for x in res] == ["succeeded"]
     assert res[0]["output"] == str(out) and res[0]["model"] == "denoise/identity@0.1.0"
     assert out.read_bytes()[:2] in (b"II", b"MM")
+    assert out.stat().st_mode & 0o777 == 0o644
     assert "done" in r.stderr
     # Re-running without --overwrite is an invalid invocation, and the file is untouched.
     before = out.read_bytes()
