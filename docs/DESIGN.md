@@ -107,7 +107,7 @@ Job request:
 
 **Security.** `painite-server admin init` creates a private CA and a server certificate for the Spark's LAN name. `painite-server token create --name studio-mac` prints a token; only its hash is stored, and `token revoke` disables it. Clients pin the CA fingerprint on first configuration. Every job, source, and result is owned by a token; other tokens get `404`. Logs record job IDs, sizes, and timings, never pixels, file names, or tokens.
 
-**Deployment.** One Docker image based on an NGC PyTorch container, run with `--gpus all` and a systemd unit on spark1. Model weights live in a versioned directory (`/var/lib/painite/models/<op>/<name>@<version>/` with a `manifest.json` and SHA-256), so several versions can be installed side by side.
+**Deployment.** One Docker image based on an NGC PyTorch container, run with `--gpus all` and a systemd unit on spark1. Model weights live in a versioned directory (`/var/lib/painite/models/<op>/<name>@<version>/` with a `manifest.json` and SHA-256), so several versions can be installed side by side. PAINITE does not ship weights: each model's manifest names its upstream download URL, expected SHA-256, and license, and `painite-server models pull <model>` downloads it on the operator's machine after showing that license. The image ships only the configuration and pipeline code.
 
 ## 6. CLI
 
@@ -133,7 +133,7 @@ painite status
 
 ## 8. Model selection
 
-Run a bake-off on spark1 under `bench/` before committing to models. Candidates, all subject to the license check the PRD requires:
+Run a bake-off on spark1 under `bench/` before committing to models. Pick the best open model for each operation on quality and performance alone. License does not limit the choice, because operators download weights themselves (see Deployment). Candidates:
 
 | Operation | Candidates to evaluate |
 | --- | --- |
@@ -141,7 +141,7 @@ Run a bake-off on spark1 under `bench/` before committing to models. Candidates,
 | Sharpen | NAFNet / Restormer deblurring variants, and a classical detail-enhance baseline |
 | 2× upscale | Real-ESRGAN x2, SwinIR, HAT |
 
-Score each on the PRD's test set (high-ISO renders, skin, foliage, text, hard edges) for detail loss, halos, color shifts, and tile seams, against reference outputs from existing tools, and record latency and peak memory at 12, 24, and 48 MP on the Spark. Weights must allow commercial redistribution; record the license of each weight file and runtime dependency.
+Score each on the PRD's test set (high-ISO renders, skin, foliage, text, hard edges) for detail loss, halos, color shifts, and tile seams, against reference outputs from existing tools, and record latency and peak memory at 12, 24, and 48 MP on the Spark. Record each chosen model's license and download source in its manifest. Redistribution terms are resolved before release, not during selection (see open question 5).
 
 ## 9. Testing
 
@@ -155,7 +155,7 @@ Score each on the PRD's test set (high-ISO renders, skin, foliage, text, hard ed
 
 | Milestone | Delivers | Exit check |
 | --- | --- | --- |
-| M0 Spikes | Model bake-off on spark1; Lightroom handoff spike on the Mac | Models chosen with licenses cleared; handoff format matrix recorded |
+| M0 Spikes | Model bake-off on spark1; Lightroom handoff spike on the Mac | Models chosen and manifests written; handoff format matrix recorded |
 | M1 Server + CLI | Contract, server with identity model then real models, CLI, `.deb` builds | CLI acceptance checks from the PRD pass on all three platforms |
 | M2 Mac app | Standalone open, preview, export | Standalone GUI check passes; preview p95 measured |
 | M3 Lightroom | Edit in, Save / Save As, Finish / Browse | Lightroom round-trip checks pass cold and warm |
@@ -169,3 +169,4 @@ M0's two spikes are independent and can run in parallel. M1 can start on the ide
 2. Is a 2× upscale with denoise in one pass wanted, or is each operation strictly separate in v1? The design keeps them separate, as the PRD states.
 3. Default JPEG quality (proposed 92, 4:4:4 chroma) and which EXIF/IPTC fields to drop, if any (proposed: keep all, drop embedded thumbnails and regenerate none).
 4. macOS distribution: Developer ID with notarization outside the App Store (assumed), since Lightroom handoff and arbitrary file writes are simpler outside the sandbox.
+5. Model licensing. Models are chosen on quality and performance alone, and users download weights directly. Before release, confirm that each chosen model's license allows this use, and whether runtime dependencies bundled in the image need their own notices.
