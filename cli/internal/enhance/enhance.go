@@ -100,9 +100,17 @@ func (r *runner) one(ctx context.Context, i int, it plan.Item) (res Result) {
 	if err != nil {
 		return fail(&api.Error{Code: "input_unreadable", Message: err.Error()})
 	}
-	r.logf(i, it.Input, "uploading %.1f MB", float64(size)/1e6)
-	if err := r.c.UploadSource(ctx, it.Input, sha, size); err != nil {
+	have, err := r.c.HasSource(ctx, sha)
+	if err != nil {
 		return fail(err)
+	}
+	if have {
+		r.logf(i, it.Input, "already on server, skipping upload")
+	} else {
+		r.logf(i, it.Input, "uploading %.1f MB", float64(size)/1e6)
+		if err := r.c.UploadSource(ctx, it.Input, sha, size); err != nil {
+			return fail(err)
+		}
 	}
 	res.ClientMS["upload"] = ms(time.Since(t0))
 
