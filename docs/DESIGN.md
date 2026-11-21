@@ -149,7 +149,7 @@ Score each on the PRD's test set (high-ISO renders, skin, foliage, text, hard ed
 - **Contract tests** run the CLI against a server that uses an identity "model", so the whole job flow is tested without a GPU in CI.
 - **Preview-export match test**: render a preview region and a full export and compare the matching pixels against the agreed tolerance.
 - **Failure tests**: kill the server mid-job, fill the disk, cancel during download, and compare source hashes before and after.
-- **Benchmarks** in `bench/` produce the latency table in the PRD's acceptance section.
+- **Benchmarks** in `bench/` produce the latency table in the PRD's acceptance section. Clients reach spark1 over Wi-Fi (the test client mm2014 sees 7 to 88 ms round trips), so every job records server-side timings (queue, decode, inference, encode) in its status, and the benchmark reports them separately from client-measured upload and download time.
 
 ## 10. Build order
 
@@ -165,7 +165,7 @@ M0's two spikes are independent and can run in parallel. M1 can start on the ide
 
 ## 11. Open questions
 
-1. Does spark1 need to be reachable outside the LAN? The design assumes LAN-only with TLS.
+1. Does spark1 need to be reachable outside the LAN? The design assumes LAN-only (Wi-Fi) with TLS.
 2. Is a 2× upscale with denoise in one pass wanted, or is each operation strictly separate in v1? The design keeps them separate, as the PRD states.
 3. Default JPEG quality (proposed 92, 4:4:4 chroma) and which EXIF/IPTC fields to drop, if any (proposed: keep all, drop embedded thumbnails and regenerate none).
 4. macOS distribution: Developer ID with notarization outside the App Store (assumed), since Lightroom handoff and arbitrary file writes are simpler outside the sandbox.
