@@ -1,0 +1,20 @@
+name: Mac app
+
+# macOS runners cost more than Linux ones, so this runs only when the app or the contract changes.
+on:
+  push:
+    branches: [main]
+    paths: [mac/**, api/**, .github/workflows/mac.yml]
+  pull_request:
+    paths: [mac/**, api/**, .github/workflows/mac.yml]
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and test
+        working-directory: mac
+        run: |
+          swift build
+          swift test
