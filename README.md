@@ -17,4 +17,4 @@ PAINITE is an AI photo enhancement project with a macOS app and a standalone CLI
 
 The first release proposes AI noise reduction, sharpening, and upscaling across all three workflows. The project is in the requirements stage.
 
-[Product requirements document](docs/PRD.md)
+[Product requirements document](docs/PRD.md) · [Design](docs/DESIGN.md)
