@@ -87,3 +87,25 @@ final class FileHandlingTests: XCTestCase {
         XCTAssertFalse(PreviewGeometry.covers(Region(x: 0, y: 0, w: 512, h: 512), Region(x: 10, y: 10, w: 600, h: 100)))
     }
 }
+
+final class CATrustTests: XCTestCase {
+    func testFingerprintNormalization() {
+        XCTAssertEqual(CATrust.normalize("SHA256:AB12cd"), "SHA256:ab12cd")
+        XCTAssertEqual(CATrust.normalize(" ab:12:CD \n"), "SHA256:ab12cd")
+        XCTAssertEqual(CATrust.fingerprint(der: Data("abc".utf8)),
+                       "SHA256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+    }
+
+    func testFetchNeedsHTTPS() async {
+        do {
+            _ = try await CATrust.fetch(endpoint: "http://spark1:8443")
+            XCTFail("expected an error")
+        } catch {
+            XCTAssertEqual((error as? APIError)?.code, "not_configured")
+        }
+    }
+
+    func testCAPathIsNextToConfig() {
+        XCTAssertEqual(CATrust.defaultCAPath(configPath: URL(fileURLWithPath: "/x/painite/config.json")).path, "/x/painite/ca.pem")
+    }
+}

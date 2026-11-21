@@ -218,6 +218,7 @@ public struct APIError: Error, Sendable, Equatable, LocalizedError {
         switch code {
         case "not_configured": return message
         case "connection_failed": return "Can't reach the PAINITE server. Check the server address and that the server is running. (\(message))"
+        case "tls_untrusted": return "The server's certificate isn't trusted. In Settings, enter the CA fingerprint from `painite-server admin fingerprint` and click Trust."
         case "unauthorized": return "The server rejected the access token. Check it in Settings."
         case "unsupported_format": return "The server can't read this image. PAINITE supports RGB JPEG and TIFF files without alpha."
         case "too_many_pixels": return "This image is larger than the server allows. (\(message))"

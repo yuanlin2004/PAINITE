@@ -9,6 +9,9 @@ struct SettingsView: View {
     @State private var token = ""
     @State private var caFile = ""
     @State private var saveError: String?
+    @State private var fingerprint = ""
+    @State private var trustMessage: String?
+    @State private var trusting = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -18,6 +21,15 @@ struct SettingsView: View {
                 HStack {
                     TextField("CA certificate", text: $caFile, prompt: Text("optional PEM file"))
                     Button("Choose…", action: chooseCA)
+                }
+            }
+            if endpoint.lowercased().hasPrefix("https://") {
+                HStack {
+                    TextField("CA fingerprint", text: $fingerprint, prompt: Text("SHA256:… from painite-server admin fingerprint"))
+                    Button("Trust", action: trust).disabled(trusting)
+                }
+                if let trustMessage {
+                    Text(trustMessage).font(.callout).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
                 }
             }
             Text("Shared with the painite command-line tool: \(server.configPath)")
@@ -87,6 +99,36 @@ struct SettingsView: View {
             saveError = nil
         } catch {
             saveError = error.localizedDescription
+        }
+    }
+
+    /// Like `painite trust`: fetch the server's CA, check its fingerprint, save it, and use it.
+    private func trust() {
+        trusting = true
+        trustMessage = "Fetching the server's CA…"
+        let endpoint = endpoint
+        let wanted = fingerprint
+        Task {
+            defer { trusting = false }
+            do {
+                let (pem, got) = try await CATrust.fetch(endpoint: endpoint)
+                if wanted.trimmingCharacters(in: .whitespaces).isEmpty {
+                    trustMessage = "The server presents \(got). Compare it with `painite-server admin fingerprint` on the server, paste it above, and click Trust."
+                    return
+                }
+                guard CATrust.normalize(wanted) == got else {
+                    trustMessage = "Fingerprint mismatch: the server presented \(got). Not trusted."
+                    return
+                }
+                let path = CATrust.defaultCAPath()
+                try FileManager.default.createDirectory(at: path.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try pem.write(to: path, options: .atomic)
+                caFile = path.path
+                save()
+                trustMessage = saveError == nil ? "Trusted. Saved the CA to \(path.path)." : nil
+            } catch {
+                trustMessage = error.localizedDescription
+            }
         }
     }
 

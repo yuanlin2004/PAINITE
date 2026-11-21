@@ -229,6 +229,12 @@ public final class APIClient: @unchecked Sendable {
         if error is CancellationError || error is APIError { return error }
         if let u = error as? URLError {
             if u.code == .cancelled { return CancellationError() }
+            let tlsCodes: [URLError.Code] = [.serverCertificateUntrusted, .serverCertificateHasUnknownRoot,
+                                             .serverCertificateHasBadDate, .serverCertificateNotYetValid,
+                                             .secureConnectionFailed]
+            if tlsCodes.contains(u.code) {
+                return APIError(code: "tls_untrusted", message: u.localizedDescription)
+            }
             return APIError(code: "connection_failed", message: u.localizedDescription)
         }
         return APIError(code: "connection_failed", message: error.localizedDescription)
@@ -278,7 +284,8 @@ private final class TrustDelegate: NSObject, URLSessionDelegate, @unchecked Send
         if SecTrustEvaluateWithError(serverTrust, nil) {
             completionHandler(.useCredential, URLCredential(trust: serverTrust))
         } else {
-            completionHandler(.cancelAuthenticationChallenge, nil)
+            // Fall back to the system roots, which fail with a "certificate untrusted" error (tls_untrusted).
+            completionHandler(.performDefaultHandling, nil)
         }
     }
 }
