@@ -188,9 +188,13 @@ func writeMarkedCopy(from srcURL: URL, to destURL: URL) throws {
     let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [String: Any] ?? [:]
     let cs = img.colorSpace ?? CGColorSpace(name: CGColorSpace.sRGB)!
     let bpc = img.bitsPerComponent
+    // Keep RGB-only output: Lightroom hands over 3-channel TIFFs, and an
+    // alpha channel would change the file's layout and size.
+    let alpha = img.alphaInfo == .none || img.alphaInfo == .noneSkipLast || img.alphaInfo == .noneSkipFirst
+        ? CGImageAlphaInfo.noneSkipLast : CGImageAlphaInfo.premultipliedLast
     let info: UInt32 = bpc == 16
-        ? CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder16Little.rawValue
-        : CGImageAlphaInfo.premultipliedLast.rawValue
+        ? alpha.rawValue | CGBitmapInfo.byteOrder16Little.rawValue
+        : alpha.rawValue
     guard let ctx = CGContext(data: nil, width: img.width, height: img.height,
                               bitsPerComponent: bpc, bytesPerRow: 0, space: cs, bitmapInfo: info) else {
         throw NSError(domain: "spike", code: 2, userInfo: [NSLocalizedDescriptionKey: "cannot create \(bpc)-bit context in \(cs.name as String? ?? "?")"])
@@ -228,6 +232,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var pathLabel: NSTextField!
     var current: URL?
     var didFinishLaunching = false
+    var openCount = 0
 
     func applicationWillFinishLaunching(_ n: Notification) {
         log("will_finish_launching", ["argv": CommandLine.arguments])
@@ -240,8 +245,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func application(_ app: NSApplication, open urls: [URL]) {
-        // Before didFinishLaunching => the open came with a cold launch.
-        let phase = didFinishLaunching ? "warm" : "cold"
+        // Lightroom launches the app and sends the open event after
+        // didFinishLaunching (observed ~0.5 s), so treat the first open that
+        // arrives within 2 s of process start as part of a cold launch.
+        let early = Date().timeIntervalSince(processStart) < 2.0
+        let phase = (!didFinishLaunching || (openCount == 0 && early)) ? "cold" : "warm"
+        openCount += urls.count
         for url in urls { inspect(url, phase: phase) }
         if !didFinishLaunching { buildUI() }
         NSApp.activate(ignoringOtherApps: true)

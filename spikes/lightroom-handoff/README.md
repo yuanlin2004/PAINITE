@@ -13,6 +13,8 @@ cd spikes/lightroom-handoff
 ./build.sh --install     # builds, copies to ~/Applications, registers with Launch Services
 ```
 
+Then copy it to `/Applications` as well, which is where Lightroom's chooser looks first. If Lightroom's **Edit in** submenu is blank, see RESULTS.md for the `ExternalEditors` entry that fixed it.
+
 The app is ad-hoc signed. If macOS blocks the first launch, open it once from Finder with right-click → Open.
 
 Every event goes to `~/Library/Logs/PainiteHandoffSpike/handoff.jsonl` (one JSON object per line) and to the app window.
