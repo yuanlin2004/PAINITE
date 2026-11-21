@@ -15,6 +15,7 @@ import pytest
 import uvicorn
 
 from conftest import make_image
+from painite_server import tls
 from painite_server.app import create_app
 
 REPO = Path(__file__).resolve().parents[2]
@@ -28,29 +29,48 @@ def cli_bin(tmp_path_factory) -> Path:
     return out
 
 
-@pytest.fixture
-def server(settings):
+def _start(settings, use_tls: bool):
     app = create_app(settings)
     _, token = app.state.store.create_token("cli")
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         port = s.getsockname()[1]
-    srv = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
+    ssl_args = {}
+    if use_tls:
+        tls.init(settings.data_dir, ["localhost"], ["127.0.0.1"])
+        p = tls.paths(settings.data_dir)
+        ssl_args = {"ssl_certfile": str(p["server_cert"]), "ssl_keyfile": str(p["server_key"])}
+    srv = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning", **ssl_args))
     t = threading.Thread(target=srv.run, daemon=True)
     t.start()
     for _ in range(100):
         if srv.started:
             break
         time.sleep(0.05)
-    yield f"http://127.0.0.1:{port}", token
+    return srv, t, f"{'https' if use_tls else 'http'}://localhost:{port}", token
+
+
+@pytest.fixture
+def server(settings):
+    srv, t, url, token = _start(settings, use_tls=False)
+    yield url, token
     srv.should_exit = True
     t.join(timeout=10)
 
 
-def painite(cli_bin, server, tmp_path, *args):
-    endpoint, token = server
-    env = {"PAINITE_CONFIG": str(tmp_path / "cfg.json"), "PAINITE_ENDPOINT": endpoint, "PAINITE_TOKEN": token,
-           "PATH": "/usr/bin:/bin"}
+@pytest.fixture
+def tls_server(settings):
+    srv, t, url, token = _start(settings, use_tls=True)
+    yield url, token, settings
+    srv.should_exit = True
+    t.join(timeout=10)
+
+
+def painite(cli_bin, server, tmp_path, *args, endpoint_env=True):
+    endpoint, token = server[:2]
+    env = {"PAINITE_CONFIG": str(tmp_path / "cfg" / "config.json"), "PAINITE_TOKEN": token, "PATH": "/usr/bin:/bin"}
+    if endpoint_env:
+        env["PAINITE_ENDPOINT"] = endpoint
     return subprocess.run([str(cli_bin), *args], capture_output=True, text=True, env=env, timeout=120)
 
 
@@ -125,3 +145,29 @@ def test_bad_token(cli_bin, server, tmp_path):
                 str(tmp_path / "o.jpg"), str(src))
     assert r.returncode == 1
     assert json.loads(r.stdout)["results"][0]["error"]["code"] == "unauthorized"
+
+
+def test_tls_trust_flow(cli_bin, tls_server, tmp_path):
+    url, token, settings = tls_server
+    fp = tls.fingerprint(tls.paths(settings.data_dir)["ca_cert"].read_bytes())
+    run = lambda *a: painite(cli_bin, tls_server, tmp_path, *a, endpoint_env=False)  # noqa: E731
+    assert run("config", "set", "endpoint", url).returncode == 0
+
+    # Untrusted until pinned, with an actionable error.
+    r = run("status")
+    assert r.returncode == 1 and "painite trust" in r.stderr
+
+    # Without --fingerprint: prints what the server presents, trusts nothing.
+    r = run("trust")
+    assert r.returncode == 1 and r.stdout.strip() == fp
+    r = run("trust", "--fingerprint", "SHA256:" + "0" * 64)
+    assert r.returncode == 1 and "mismatch" in r.stderr
+
+    r = run("trust", "--fingerprint", fp.upper().replace("SHA256:", ""))
+    assert r.returncode == 0, r.stderr
+    assert (tmp_path / "cfg" / "ca.pem").exists()
+    assert run("status").returncode == 0
+
+    src = make_image(tmp_path / "in.jpg", 100, 80, fmt="jpeg")
+    r = run("enhance", "--op", "sharpen", "-o", str(tmp_path / "out.jpg"), str(src))
+    assert r.returncode == 0, r.stderr

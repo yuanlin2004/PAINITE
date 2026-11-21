@@ -12,6 +12,7 @@ dependencies = [
   "uvicorn[standard]>=0.30",
   "pyvips>=2.2",
   "numpy>=1.26",
+  "cryptography>=42",
 ]
 
 [project.optional-dependencies]
@@ -22,6 +23,9 @@ painite-server = "painite_server.__main__:main"
 
 [tool.setuptools.packages.find]
 include = ["painite_server*"]
+
+[tool.setuptools.package-data]
+painite_server = ["models/catalog/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

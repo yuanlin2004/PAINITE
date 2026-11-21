@@ -1,0 +1,49 @@
+name: CLI release
+
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths: ["cli/**", ".github/workflows/release-cli.yml"]
+
+permissions:
+  contents: write
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: cli/go.mod
+      - name: Snapshot build (pull requests)
+        if: github.event_name == 'pull_request'
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          workdir: cli
+          args: release --snapshot --clean
+      - name: Release (tags)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          workdir: cli
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install and run the amd64 package
+        run: |
+          sudo dpkg -i cli/dist/painite_*_amd64.deb
+          painite version
+          dpkg -L painite
+      - uses: actions/upload-artifact@v4
+        with:
+          name: painite-cli
+          path: |
+            cli/dist/*.deb
+            cli/dist/*.tar.gz
+            cli/dist/SHA256SUMS

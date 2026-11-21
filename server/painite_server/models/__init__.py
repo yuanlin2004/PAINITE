@@ -4,9 +4,18 @@ the M0 bake-off as adapters with the same interface and a manifest under
 
 from __future__ import annotations
 
+import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from .manifest import Manifest
+
+log = logging.getLogger("painite.models")
 
 
 @dataclass
@@ -87,10 +96,43 @@ OPERATION_PARAMS = {
 }
 
 
-def default_registry() -> Registry:
+# Adapters turn an installed manifest into a runnable Model. Real adapters
+# (NAFNet, Real-ESRGAN, ...) register here once the bake-off picks models.
+Adapter = Callable[["Manifest", Path], Model]
+ADAPTERS: dict[str, Adapter] = {
+    "identity": lambda m, d: IdentityModel(id=m.id, operation=m.operation, version=m.version, placeholder=True),
+    "bilinear2x": lambda m, d: BilinearUpscale2x(id=m.id, operation=m.operation, version=m.version, placeholder=True),
+}
+
+
+def default_registry(data_dir: Path | None = None) -> Registry:
+    """Placeholders, then installed models. An installed model becomes its
+    operation's default if its manifest says so, or if it is the first
+    installed one for that operation."""
     reg = Registry()
     reg.add(IdentityModel(id="denoise/identity@0.1.0", operation="denoise", version="0.1.0", placeholder=True))
     reg.add(IdentityModel(id="sharpen/identity@0.1.0", operation="sharpen", version="0.1.0", placeholder=True))
     reg.add(BilinearUpscale2x(id="upscale2x/bilinear@0.1.0", operation="upscale2x", version="0.1.0",
                               placeholder=True))
+    if data_dir is None:
+        return reg
+    from .manifest import installed  # noqa: PLC0415 - avoid import cycle
+
+    chosen: dict[str, bool] = {}  # operation -> chosen by an explicit default flag
+    for manifest, path in installed(data_dir):
+        adapter = ADAPTERS.get(manifest.adapter)
+        if adapter is None:
+            log.warning("model %s needs adapter %r, which this server does not have", manifest.id, manifest.adapter)
+            continue
+        try:
+            model = adapter(manifest, path)
+        except Exception:  # noqa: BLE001 - one broken model must not stop the server
+            log.exception("could not load model %s", manifest.id)
+            continue
+        op = manifest.operation
+        make_default = (manifest.default and not chosen.get(op)) or op not in chosen
+        reg.add(model, default=make_default)
+        if make_default:
+            chosen[op] = chosen.get(op, False) or manifest.default
+        log.info("loaded model %s%s", manifest.id, " (default)" if make_default else "")
     return reg

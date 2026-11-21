@@ -1,0 +1,49 @@
+# Release builds for the painite CLI (DESIGN.md section 6).
+# Snapshot locally or in CI:  goreleaser release --snapshot --clean   (run in cli/)
+# Real releases run from .github/workflows/release-cli.yml on a v* tag (draft release).
+version: 2
+project_name: painite
+
+builds:
+  - id: painite
+    main: ./cmd/painite
+    binary: painite
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath]
+    ldflags: ["-s -w -X main.version={{ .Version }}"]
+    targets: [linux_amd64_v1, linux_arm64, darwin_arm64]
+
+archives:
+  - id: painite
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files: [README.md]
+
+nfpms:
+  - id: painite-deb
+    package_name: painite
+    file_name_template: "{{ .PackageName }}_{{ .Version }}_{{ .Arch }}"
+    ids: [painite]
+    formats: [deb]
+    maintainer: PAINITE <noreply@users.noreply.github.com>
+    description: Command line client for the PAINITE photo enhancement server.
+    homepage: https://github.com/yuanlin2004/PAINITE
+    license: Proprietary
+    section: graphics
+    bindir: /usr/bin
+    contents:
+      - src: README.md
+        dst: /usr/share/doc/painite/README.md
+
+checksum:
+  name_template: SHA256SUMS
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-dev+{{ .ShortCommit }}"
+
+changelog:
+  disable: true
+
+release:
+  draft: true

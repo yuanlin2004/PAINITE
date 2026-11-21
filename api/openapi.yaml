@@ -30,6 +30,23 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Health" }
 
+  /ca.pem:
+    get:
+      operationId: getCaCertificate
+      summary: The server's private CA certificate (PEM), for pinning by fingerprint.
+      description: |
+        Public data. Clients fetch it once over an unverified connection and
+        trust it only if its SHA-256 fingerprint matches the one the operator
+        printed with `painite-server admin fingerprint` (`painite trust`).
+      security: []
+      responses:
+        "200":
+          description: PEM certificate.
+          content:
+            application/x-pem-file:
+              schema: { type: string }
+        "404": { $ref: "#/components/responses/Error" }
+
   /capabilities:
     get:
       operationId: getCapabilities

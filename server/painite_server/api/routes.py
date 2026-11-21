@@ -148,6 +148,18 @@ def health(request: Request) -> dict:
     }
 
 
+@router.get("/ca.pem")
+def ca_certificate(request: Request) -> Response:
+    """The private CA certificate, so clients can pin it by fingerprint
+    (`painite trust`). Public data; no auth."""
+    from ..tls import paths  # noqa: PLC0415
+
+    ca = paths(request.app.state.settings.data_dir)["ca_cert"]
+    if not ca.exists():
+        raise not_found("this server has no private CA; run `painite-server admin init`")
+    return Response(ca.read_bytes(), media_type="application/x-pem-file")
+
+
 @router.get("/capabilities")
 def capabilities(request: Request, owner: Owner) -> dict:
     s = request.app.state.settings

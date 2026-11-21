@@ -5,7 +5,8 @@ over the contract in [`api/openapi.yaml`](../api/openapi.yaml).
 
 ## Build
 
-Needs Go 1.24 or later. No cgo, so cross-compiling is one command:
+Needs Go 1.24 or later. Release packages are built with GoReleaser
+(`cli/.goreleaser.yaml`, `goreleaser release --snapshot --clean`). No cgo, so cross-compiling is one command:
 
 ```sh
 cd cli
@@ -16,9 +17,23 @@ GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o painite-linux-arm64 ./cmd/pain
 ## Configure
 
 ```sh
-painite config set endpoint http://spark1:8443
+painite config set endpoint https://spark1:8443
+painite trust --fingerprint SHA256:...     # from `painite-server admin fingerprint`
 painite config set token pnt_...          # from `painite-server token create`
 painite status
+```
+
+`painite trust` downloads the server's private CA, checks it against the
+fingerprint the operator gave you, and saves it next to the config file. Run it
+without `--fingerprint` to see what the server presents.
+
+## Install on Ubuntu
+
+Release builds are `.deb` packages for amd64 and arm64 with a `SHA256SUMS` file:
+
+```sh
+sha256sum -c --ignore-missing SHA256SUMS
+sudo apt install ./painite_<version>_amd64.deb
 ```
 
 The config file lives in the user config directory (`~/.config/painite/config.json`
