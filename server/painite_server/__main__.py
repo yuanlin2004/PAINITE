@@ -61,8 +61,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"error: {e}", file=sys.stderr)
                 return 1
             print(secret)
-            print(f"Created token {args.name!r}. The secret is the pnt_ line above; copy that into the client. "
-                  f"It is shown only once. (Internal id {tok_.id} is not the token.)", file=sys.stderr)
+            print(f"Created token {args.name!r} ({tok_.id}). It is shown only once.", file=sys.stderr)
         elif args.tcmd == "list":
             for t in store.list_tokens():
                 created = datetime.fromtimestamp(t.created_at, tz=timezone.utc).strftime("%Y-%m-%d %H:%M")
