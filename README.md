@@ -5,14 +5,14 @@
 
 # PAINITE
 
-PAINITE is an AI photo enhancement project for macOS. The Mac app and command-line tool send photos to a separate inference server for processing. NVIDIA DGX Spark is the initial server target.
+PAINITE is an AI photo enhancement project with a macOS app and a standalone CLI for macOS and Linux. Both send photos to a separate inference server for processing. NVIDIA DGX Spark is the initial server target.
 
 ## Planned workflows
 
 | Mode | Workflow |
 | --- | --- |
 | Standalone Mac app | Open a photo, preview the enhancement against the original, and export the result. |
-| Standalone CLI | Enhance a single photo or batch from the terminal, with no desktop app required. |
+| Standalone CLI | Enhance a single photo or batch from the terminal on macOS or Linux (x86-64 and ARM64). |
 | Adobe Lightroom desktop | Open a photo in PAINITE through **Edit in**, save the enhancement, then select **Finish** in Lightroom to bring it back. |
 
 The first release proposes AI noise reduction, sharpening, and upscaling across all three workflows. The project is in the requirements stage.
