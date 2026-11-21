@@ -1,0 +1,419 @@
+openapi: 3.1.0
+info:
+  title: PAINITE inference service
+  version: 1.0.0-draft
+  description: |
+    The job contract shared by painite-server, the painite CLI, and PAINITE.app.
+    See docs/DESIGN.md section 4.
+
+    Control messages are JSON. Images travel as raw bytes. Every error response
+    uses the `Error` schema with a stable `code`; the CLI's `--json` output reuses
+    these codes.
+
+    Ownership: every source, job, and result belongs to the token that created
+    it. Requests for objects owned by another token return `404 not_found`.
+servers:
+  - url: https://spark1.local:8443/v1
+security:
+  - bearerToken: []
+
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: Liveness, GPU status, and queue depth.
+      security: []
+      responses:
+        "200":
+          description: Server is up.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+
+  /capabilities:
+    get:
+      operationId: getCapabilities
+      summary: Operations, parameter ranges, installed models, limits, and formats.
+      responses:
+        "200":
+          description: Capabilities.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Capabilities" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /sources/{sha256}:
+    parameters:
+      - $ref: "#/components/parameters/Sha256"
+    head:
+      operationId: headSource
+      summary: Check whether this token already uploaded a source, without sending bytes.
+      responses:
+        "200": { description: The source exists and can be used in jobs. }
+        "404": { description: Not uploaded (or expired). }
+        "401": { description: Unauthorized. }
+    put:
+      operationId: putSource
+      summary: Upload an original image, addressed by the SHA-256 of its bytes.
+      description: |
+        Re-uploading an existing source is a no-op. The server verifies the
+        digest and rejects mismatches with `digest_mismatch`. The file is
+        probed on upload, so unsupported or oversized images fail here rather
+        than at job time.
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        "200":
+          description: Stored (or already present).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Source" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
+        "415": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "507": { $ref: "#/components/responses/Error" }
+
+  /jobs:
+    post:
+      operationId: createJob
+      summary: Create a preview or full job.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          description: |
+            The client's request key, 8 to 128 characters. Scoped to the token.
+            The same key with the same body returns the existing job (200)
+            while it exists and for 24 hours after it ends, even if the result
+            was deleted early. The same key with a different body returns
+            409 `idempotency_conflict`.
+          schema: { type: string, minLength: 8, maxLength: 128 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/JobRequest" }
+      responses:
+        "201":
+          description: Job created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        "200":
+          description: Existing job for this idempotency key.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+
+  /jobs/{job_id}:
+    parameters:
+      - $ref: "#/components/parameters/JobId"
+    get:
+      operationId: getJob
+      summary: Job status, progress, timings, and error.
+      responses:
+        "200":
+          description: Job.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /jobs/{job_id}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/JobId"
+    post:
+      operationId: cancelJob
+      summary: Cancel a queued or running job. Canceling a finished job is a no-op.
+      responses:
+        "200":
+          description: Job after the cancel request.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /jobs/{job_id}/result:
+    parameters:
+      - $ref: "#/components/parameters/JobId"
+    get:
+      operationId: getJobResult
+      summary: Download the output. Supports HTTP Range for resuming.
+      parameters:
+        - name: Range
+          in: header
+          required: false
+          schema: { type: string, example: "bytes=1048576-" }
+      responses:
+        "200":
+          description: Whole file.
+          headers:
+            X-Painite-SHA256:
+              description: SHA-256 of the complete result, so a resumed download can be verified.
+              schema: { type: string }
+          content:
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/tiff: { schema: { type: string, format: binary } }
+        "206":
+          description: Partial content.
+          content:
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/tiff: { schema: { type: string, format: binary } }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "410": { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteJobResult
+      summary: Delete the output before it expires.
+      responses:
+        "204": { description: Deleted (or already gone). }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+components:
+  securitySchemes:
+    bearerToken:
+      type: http
+      scheme: bearer
+      description: Token created with `painite-server token create`. Only its hash is stored.
+
+  parameters:
+    Sha256:
+      name: sha256
+      in: path
+      required: true
+      schema: { type: string, pattern: "^[0-9a-f]{64}$" }
+    JobId:
+      name: job_id
+      in: path
+      required: true
+      schema: { type: string, pattern: "^job_[0-9a-z]{26}$" }
+
+  responses:
+    Error:
+      description: Error with a stable code.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    ErrorCode:
+      type: string
+      description: Stable error codes. Clients must treat unknown codes as generic failures.
+      enum:
+        - bad_request
+        - unauthorized
+        - not_found
+        - digest_mismatch
+        - unsupported_format
+        - too_many_pixels
+        - upload_too_large
+        - disk_full
+        - model_unavailable
+        - invalid_params
+        - idempotency_conflict
+        - queue_full
+        - result_unavailable
+        - result_not_ready
+        - processing_failed
+        - canceled
+        - internal
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { $ref: "#/components/schemas/ErrorCode" }
+            message: { type: string }
+
+    Health:
+      type: object
+      required: [status, version, gpu, queue]
+      properties:
+        status: { type: string, enum: [ok] }
+        version: { type: string }
+        gpu:
+          type: object
+          required: [available]
+          properties:
+            available: { type: boolean }
+            name: { type: [string, "null"] }
+        queue:
+          type: object
+          required: [queued, running, capacity]
+          properties:
+            queued: { type: integer }
+            running: { type: integer }
+            capacity: { type: integer }
+
+    Operation:
+      type: string
+      enum: [denoise, sharpen, upscale2x]
+
+    OutputFormat:
+      type: string
+      enum: [jpeg, tiff]
+
+    Capabilities:
+      type: object
+      required: [operations, models, limits, formats]
+      properties:
+        operations:
+          type: array
+          items:
+            type: object
+            required: [name, default_model, params]
+            properties:
+              name: { $ref: "#/components/schemas/Operation" }
+              default_model: { type: string }
+              params:
+                type: object
+                description: Parameter name to range. Empty for operations without parameters.
+                additionalProperties:
+                  type: object
+                  required: [min, max, default]
+                  properties:
+                    min: { type: number }
+                    max: { type: number }
+                    default: { type: number }
+        models:
+          type: array
+          items:
+            type: object
+            required: [id, operation, version, scale]
+            properties:
+              id: { type: string, example: "denoise/identity@0.1.0" }
+              operation: { $ref: "#/components/schemas/Operation" }
+              version: { type: string }
+              scale: { type: integer, enum: [1, 2] }
+              placeholder: { type: boolean, description: True for test models that do not enhance. }
+        limits:
+          type: object
+          required: [max_upload_bytes, max_input_pixels, max_output_pixels, queue_capacity]
+          properties:
+            max_upload_bytes: { type: integer }
+            max_input_pixels: { type: integer }
+            max_output_pixels: { type: integer }
+            queue_capacity: { type: integer }
+            result_retention_seconds: { type: integer }
+            tile_size: { type: integer }
+        formats:
+          type: object
+          required: [input, output]
+          properties:
+            input: { type: array, items: { $ref: "#/components/schemas/OutputFormat" } }
+            output: { type: array, items: { $ref: "#/components/schemas/OutputFormat" } }
+
+    Source:
+      type: object
+      required: [source_id, bytes, width, height, format]
+      properties:
+        source_id: { type: string, example: "sha256:9f86d0…" }
+        bytes: { type: integer }
+        width: { type: integer, description: Stored pixel width (before EXIF orientation). }
+        height: { type: integer }
+        format: { $ref: "#/components/schemas/OutputFormat" }
+        bits_per_channel: { type: integer, enum: [8, 16] }
+        orientation: { type: integer, minimum: 1, maximum: 8 }
+        has_icc: { type: boolean }
+
+    Region:
+      type: object
+      description: |
+        Preview region in displayed (orientation-applied) source pixels. The
+        server maps it to stored pixels and snaps it outward to the full
+        image's tile grid, so the preview equals the same region of a full
+        export. `Job.region` reports the snapped region actually rendered.
+      required: [x, y, w, h]
+      properties:
+        x: { type: integer, minimum: 0 }
+        y: { type: integer, minimum: 0 }
+        w: { type: integer, minimum: 1 }
+        h: { type: integer, minimum: 1 }
+
+    JobRequest:
+      type: object
+      required: [source_id, kind, operation]
+      additionalProperties: false
+      properties:
+        source_id: { type: string, pattern: "^sha256:[0-9a-f]{64}$" }
+        kind: { type: string, enum: [preview, full] }
+        operation: { $ref: "#/components/schemas/Operation" }
+        params:
+          type: object
+          properties:
+            strength: { type: number, minimum: 0, maximum: 1 }
+        model:
+          type: string
+          description: Pinned model ID. Defaults to the operation's default model; the job reports the one used.
+        region: { $ref: "#/components/schemas/Region" }
+        output:
+          type: object
+          properties:
+            format: { $ref: "#/components/schemas/OutputFormat" }
+            jpeg_quality: { type: integer, minimum: 1, maximum: 100, default: 92 }
+
+    JobState:
+      type: string
+      enum: [queued, running, completed, failed, canceled]
+
+    Job:
+      type: object
+      required: [id, state, kind, operation, model, source_id, created_at]
+      properties:
+        id: { type: string }
+        state: { $ref: "#/components/schemas/JobState" }
+        kind: { type: string, enum: [preview, full] }
+        operation: { $ref: "#/components/schemas/Operation" }
+        model: { type: string }
+        source_id: { type: string }
+        params: { type: object }
+        region:
+          oneOf:
+            - $ref: "#/components/schemas/Region"
+            - type: "null"
+        progress: { type: number, minimum: 0, maximum: 1 }
+        created_at: { type: string, format: date-time }
+        started_at: { type: [string, "null"], format: date-time }
+        finished_at: { type: [string, "null"], format: date-time }
+        result:
+          type: [object, "null"]
+          properties:
+            bytes: { type: integer }
+            sha256: { type: string }
+            format: { $ref: "#/components/schemas/OutputFormat" }
+            width: { type: integer }
+            height: { type: integer }
+            expires_at: { type: string, format: date-time }
+            deleted: { type: boolean }
+        timings_ms:
+          type: object
+          description: Server-side timings, reported separately from client transfer time.
+          properties:
+            queue: { type: number }
+            decode: { type: number }
+            inference: { type: number }
+            encode: { type: number }
+            total: { type: number }
+        error:
+          oneOf:
+            - $ref: "#/components/schemas/Error/properties/error"
+            - type: "null"
