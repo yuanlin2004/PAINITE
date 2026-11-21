@@ -133,13 +133,13 @@ painite status
 
 ## 8. Model selection
 
-Run a bake-off on spark1 under `bench/` before committing to models. Pick the best open model for each operation on quality and performance alone. License does not limit the choice, because operators download weights themselves (see Deployment). Candidates:
+Run a bake-off on spark1 under `bench/` before committing to models. Large diffusion-based restorers are left out of v1 because of the preview latency target. Pick the best open model for each operation on quality and performance alone. License does not limit the choice, because operators download weights themselves (see Deployment). Candidates:
 
 | Operation | Candidates to evaluate |
 | --- | --- |
-| Denoise | NAFNet (SIDD), Restormer (real denoising), SCUNet |
+| Denoise | NAFNet (SIDD), Restormer (real denoising), SCUNet, and variants trained on larger datasets |
 | Sharpen | NAFNet / Restormer deblurring variants, and a classical detail-enhance baseline |
-| 2× upscale | Real-ESRGAN x2, SwinIR, HAT |
+| 2× upscale | Real-ESRGAN x2, SwinIR, HAT / HAT-L, DRCT |
 
 Score each on the PRD's test set (high-ISO renders, skin, foliage, text, hard edges) for detail loss, halos, color shifts, and tile seams, against reference outputs from existing tools, and record latency and peak memory at 12, 24, and 48 MP on the Spark. Record each chosen model's license and download source in its manifest. Redistribution terms are resolved before release, not during selection (see open question 5).
 
