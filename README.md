@@ -11,9 +11,9 @@ PAINITE is an AI photo enhancement project with a macOS app and a standalone CLI
 
 | Mode | Workflow |
 | --- | --- |
-| Standalone Mac app | Open a photo, preview the enhancement against the original, and export the result. |
-| Standalone CLI | Enhance a single photo or batch from the terminal on macOS or Linux (x86-64 and ARM64). |
-| Adobe Lightroom desktop | Open a photo in PAINITE through **Edit in**, save the enhancement, then select **Finish** in Lightroom to bring it back. |
+| Standalone Mac app | On macOS 27 or later (Apple silicon), open a photo, preview the enhancement against the original, and export the result. |
+| Standalone CLI | Enhance a single photo or batch on macOS 27 or later (Apple silicon) or Ubuntu 24.04 or later (x86-64 and ARM64). |
+| Adobe Lightroom desktop | On a supported Mac, open a photo in PAINITE through **Edit in**, save the enhancement, then select **Finish** in Lightroom to bring it back. |
 
 The first release proposes AI noise reduction, sharpening, and upscaling across all three workflows. The project is in the requirements stage.
 
