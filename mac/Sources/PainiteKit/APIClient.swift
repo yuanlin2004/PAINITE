@@ -27,15 +27,15 @@ public final class APIClient: @unchecked Sendable {
 
     /// - Parameter protocolClasses: test hook for stubbing the network.
     public init(config: ClientConfig, protocolClasses: [AnyClass]? = nil) throws {
-        let endpoint = config.endpoint.trimmingCharacters(in: .whitespaces)
+        var endpoint = config.endpoint.trimmingCharacters(in: .whitespaces)
+        while endpoint.hasSuffix("/") { endpoint.removeLast() }
         guard !endpoint.isEmpty else {
             throw APIError(code: "not_configured", message: "No server is configured. Add its address and token in Settings.")
         }
-        guard var url = URL(string: endpoint), let scheme = url.scheme?.lowercased(),
+        guard let url = URL(string: endpoint), let scheme = url.scheme?.lowercased(),
               scheme == "http" || scheme == "https", url.host != nil else {
             throw APIError(code: "not_configured", message: "The server address must look like https://spark1.local:8443")
         }
-        while url.path.hasSuffix("/") { url.deleteLastPathComponent() }
         baseURL = url.appendingPathComponent("v1")
         token = config.token.trimmingCharacters(in: .whitespacesAndNewlines)
 
