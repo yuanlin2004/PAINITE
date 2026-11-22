@@ -19,7 +19,7 @@ import pyvips
 
 from ..errors import ApiError
 from ..models import Model
-from .geometry import Rect
+from .geometry import Rect, display_point_to_stored, displayed_size
 
 LOADERS = {"jpegload": "jpeg", "jpegload_source": "jpeg", "tiffload": "tiff", "tiffload_source": "tiff"}
 FORMAT_EXT = {"jpeg": ".jpg", "tiff": ".tif"}
@@ -152,6 +152,8 @@ def run(
         st = steps[k - 1]
         sc = st.model.scale
         in_w, in_h = sizes[k - 1]
+        if st.model.whole_image:
+            return render_whole(k, st, need, in_w, in_h)
         # Input pixels whose tiles produce `need`, grown to whole tiles of this step's grid.
         ix0, iy0 = need.x // sc, need.y // sc
         ix1, iy1 = -(-(need.x + need.w) // sc), -(-(need.y + need.h) // sc)
@@ -172,6 +174,26 @@ def run(
                              step_progress, is_canceled)
         timings["inference"] += (time.perf_counter() - t1) * 1000
         return out, Rect(area.x * sc, area.y * sc, area.w * sc, area.h * sc)
+
+    def render_whole(k: int, st: Step, need: Rect, in_w: int, in_h: int) -> tuple[np.ndarray, Rect]:
+        """A whole-image step (face). Faces are detected once on the source and
+        scaled to this step's input; the step needs `need` plus the full box of
+        every face touching it, and nothing else."""
+        model = st.model
+        dets = _detections(src, source_path, model, maxval, timings)
+        faces = model.layout(dets, in_w // src.width, in_w, in_h)
+        want = model.input_rect(faces, need)
+        inp, got = render(k - 1, want)
+        window = inp[want.y - got.y:want.y - got.y + want.h, want.x - got.x:want.x - got.x + want.w]
+        t1 = time.perf_counter()
+
+        def step_progress(p: float) -> None:
+            on_progress((k - 1 + p) / n)
+
+        out = model.run_area(window, (want.x, want.y), need, faces, st.params.get("strength"), step_progress,
+                             is_canceled)
+        timings["inference"] += (time.perf_counter() - t1) * 1000
+        return out, need
 
     pixels, got = render(n, final)
     result = pixels[final.y - got.y:final.y - got.y + final.h, final.x - got.x:final.x - got.x + final.w]
@@ -195,6 +217,35 @@ def run(
         height=result.shape[0],
         timings_ms=timings,
     )
+
+
+def _detections(src: pyvips.Image, source_path: Path, model: Model, maxval: float,
+                timings: dict[str, float]) -> list:
+    """Faces in the source, in stored pixels, cached by the model per source.
+    Detection runs upright: on an orientation-applied downscale of the whole
+    image, so it never depends on the requested region."""
+    width, height = src.width, src.height
+    fields = src.get_fields()
+    orientation = src.get("orientation") if "orientation" in fields else 1
+    orientation = orientation if 1 <= orientation <= 8 else 1
+    disp_w, disp_h = displayed_size(width, height, orientation)
+    dw, dh = model.detection_size(disp_w, disp_h)
+
+    def small() -> np.ndarray:
+        t0 = time.perf_counter()
+        img = src.autorot() if orientation != 1 else src
+        if (dw, dh) != (disp_w, disp_h):
+            img = img.resize(dw / disp_w, vscale=dh / disp_h)
+        px = img.crop(0, 0, dw, dh).numpy().astype(np.float32) / maxval
+        timings["decode"] += (time.perf_counter() - t0) * 1000
+        return px[:, :, None] if px.ndim == 2 else px
+
+    st = source_path.stat()
+    dets = model.detections((str(source_path), st.st_mtime_ns, st.st_size), small, disp_w, disp_h)
+    if orientation != 1:
+        dets = [(score, np.array([display_point_to_stored(x, y, width, height, orientation) for x, y in pts]))
+                for score, pts in dets]
+    return dets
 
 
 def _snap(r: Rect, tile: int, width: int, height: int) -> Rect:

@@ -283,7 +283,10 @@ components:
 
     Operation:
       type: string
-      enum: [denoise, sharpen, upscale2x]
+      description: |
+        `face` restores the faces it detects and leaves the rest of the image unchanged; a photo
+        with no faces comes back unchanged. Its strength blends each restored face with the original.
+      enum: [denoise, sharpen, upscale2x, face]
 
     OutputFormat:
       type: string

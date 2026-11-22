@@ -19,8 +19,12 @@ def test_catalog_has_the_bakeoff_picks():
         "denoise/scunet-real-gan@1.0.0",
         "sharpen/realesrgan-x2-down@1.0.0",
         "upscale2x/nomosuni-esrgan-multijpg@1.0.0",
+        "face/gpen-bfr-1024@1.0.0",
     }
     for m in cat.values():
+        if m.adapter == "face":
+            assert {m.config["detector"], m.config["restorer"]} <= {f.name for f in m.files} and m.default
+            continue
         assert m.adapter in ADAPTERS and m.default
         assert m.config["weights"] in {f.name for f in m.files}
         assert m.config["context"] >= 64

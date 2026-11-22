@@ -7,9 +7,11 @@ The PAINITE inference server (FastAPI). It implements the contract in
 **Models:** the catalog has the M0 bake-off picks ([bench/BAKEOFF.md](../bench/BAKEOFF.md)):
 `denoise/scunet-real-gan`, `sharpen/realesrgan-x2-down` (Real-ESRGAN 2x, then
 area downscale) and `upscale2x/nomosuni-esrgan-multijpg`, each followed by a
-low-frequency color anchor. Install them with `models pull --all --accept-license`.
+low-frequency color anchor, plus `face/gpen-bfr-1024` (RetinaFace detection and GPEN-BFR-1024
+restoration of faces 128 to 1024 px, [bench/FACE_BAKEOFF.md](../bench/FACE_BAKEOFF.md)).
+Install them with `models pull --all --accept-license`.
 Until they are installed, placeholder models (`denoise/identity`,
-`sharpen/identity`, `upscale2x/bilinear`) answer instead.
+`sharpen/identity`, `upscale2x/bilinear`, `face/identity`) answer instead.
 
 ## Run locally
 
