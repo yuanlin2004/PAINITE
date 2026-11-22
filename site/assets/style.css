@@ -168,3 +168,10 @@ figcaption { color: var(--muted); font-size: 14px; margin-top: 8px; }
 footer.site-footer { border-top: 1px solid var(--border); color: var(--muted); font-size: 14px; }
 footer.site-footer .inner { max-width: var(--max); margin: 0 auto; padding: 20px 16px 40px; display: flex; gap: 8px 24px; flex-wrap: wrap; }
 footer.site-footer a { color: var(--muted); }
+
+/* App screenshots */
+figure.shot { margin: 20px 0; }
+figure.shot img { border-radius: 10px; border: 1px solid var(--border); box-shadow: 0 6px 24px rgba(0,0,0,.12); }
+figure.shot.small img { width: 300px; }
+.shots { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); }
+.shots figure.shot { margin: 8px 0; }
