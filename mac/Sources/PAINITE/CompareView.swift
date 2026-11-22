@@ -17,6 +17,16 @@ final class CompareView: NSView {
     private var previewImage: CGImage?
     private var previewRegion: CGRect = .zero
     private var imageSize: CGSize = .zero
+    private var box: CGRect?
+    private var boxState: BoxState = .pending
+
+    enum BoxState {
+        /// Waiting to send, or the server is rendering it: the outline pulses.
+        case pending, rendering
+        /// The preview inside the box is current.
+        case ready
+        case failed
+    }
 
     /// Points per image pixel.
     private var scale: CGFloat = 1
@@ -53,8 +63,9 @@ final class CompareView: NSView {
         leftPane.addSublayer(leftImage)
         rightPane.addSublayer(rightBase)
         rightPane.addSublayer(rightPreview)
-        outline.borderColor = NSColor(white: 1, alpha: 0.45).cgColor
-        outline.borderWidth = 1
+        outline.borderColor = NSColor(white: 1, alpha: 0.8).cgColor
+        outline.borderWidth = 1.5
+        outline.isHidden = true
         rightPane.addSublayer(outline)
     }
 
@@ -82,6 +93,38 @@ final class CompareView: NSView {
         previewImage = image
         previewRegion = rect
         rightPreview.contents = image
+        applyTransform(notify: false)
+    }
+
+    /// The region the preview covers or is about to cover, in displayed source pixels.
+    /// Moves with every zoom and pan; pulses while the server is working on it.
+    func setPreviewBox(_ region: Region?, state: BoxState) {
+        box = region.map { CGRect(x: $0.x, y: $0.y, width: $0.w, height: $0.h) }
+        // Pending and rendering look the same, so the pulse doesn't restart when the request goes out.
+        let style: (BoxState) -> Int = { $0 == .ready ? 1 : $0 == .failed ? 2 : 0 }
+        if style(state) != style(boxState) || (style(state) == 0 && outline.animation(forKey: "pulse") == nil) {
+            withoutAnimation {
+                outline.removeAnimation(forKey: "pulse")
+                outline.opacity = 1
+                switch state {
+                case .pending, .rendering:
+                    outline.borderColor = NSColor.systemYellow.withAlphaComponent(0.9).cgColor
+                    let pulse = CABasicAnimation(keyPath: "opacity")
+                    pulse.fromValue = 1
+                    pulse.toValue = 0.15
+                    pulse.duration = 0.6
+                    pulse.autoreverses = true
+                    pulse.repeatCount = .infinity
+                    pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                    outline.add(pulse, forKey: "pulse")
+                case .ready:
+                    outline.borderColor = NSColor(white: 1, alpha: 0.8).cgColor
+                case .failed:
+                    outline.borderColor = NSColor.systemOrange.cgColor
+                }
+            }
+        }
+        boxState = state
         applyTransform(notify: false)
     }
 
@@ -144,12 +187,15 @@ final class CompareView: NSView {
                 rightPreview.position = CGPoint(x: o.x + previewRegion.minX * scale, y: o.y + previewRegion.minY * scale)
                 rightPreview.transform = CATransform3DMakeScale(s, s, 1)
                 rightPreview.magnificationFilter = s * backingScale > 1.01 ? .nearest : .linear
-                outline.isHidden = false
-                outline.frame = CGRect(x: o.x + previewRegion.minX * scale, y: o.y + previewRegion.minY * scale,
-                                       width: previewRegion.width * scale, height: previewRegion.height * scale)
-                    .insetBy(dx: -1, dy: -1)
             } else {
                 rightPreview.isHidden = true
+            }
+            if let box, box.width > 0 {
+                outline.isHidden = false
+                outline.frame = CGRect(x: o.x + box.minX * scale, y: o.y + box.minY * scale,
+                                       width: box.width * scale, height: box.height * scale)
+                    .insetBy(dx: -1.5, dy: -1.5)
+            } else {
                 outline.isHidden = true
             }
         }

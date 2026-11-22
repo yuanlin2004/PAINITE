@@ -61,8 +61,12 @@ final class DocumentModel: ObservableObject {
     @Published var exportFormat: ImageFormat = .tiff
 
     @Published private(set) var upload: UploadState = .idle
-    @Published private(set) var preview: Preview?
-    @Published private(set) var previewState: PreviewState = .idle
+    @Published private(set) var preview: Preview? {
+        didSet { updatePreviewBox() }
+    }
+    @Published private(set) var previewState: PreviewState = .idle {
+        didSet { if oldValue != previewState { updatePreviewBox() } }
+    }
     @Published private(set) var export: ExportState = .idle
     @Published private(set) var zoomPercent: Double = 0
 
@@ -70,6 +74,8 @@ final class DocumentModel: ObservableObject {
     weak var viewport: CompareView?
 
     private var visible: CGRect = .zero
+    private var orientation = 1
+    private var storedSize = (width: 0, height: 0)
     private var sha: String?
     private var uploadTask: Task<String, Error>?
     private var debounceTask: Task<Void, Never>?
@@ -124,6 +130,8 @@ final class DocumentModel: ObservableObject {
             imageSize = loaded.size
             sourceFormat = loaded.format
             bitsPerChannel = loaded.bitsPerChannel
+            orientation = loaded.orientation
+            storedSize = (loaded.storedWidth, loaded.storedHeight)
             exportFormat = loaded.format ?? .tiff
             if loaded.format == nil {
                 loadError = "PAINITE works with JPEG and TIFF files. This file can be viewed but not enhanced."
@@ -200,13 +208,40 @@ final class DocumentModel: ObservableObject {
         self.zoomPercent = zoomPercent
         guard visible != self.visible else { return }
         self.visible = visible
-        schedulePreview(after: 0.3)
+        updatePreviewBox()
+        schedulePreview(after: 0.33)
+    }
+
+    /// The box the next (or current) preview covers, exactly as the server will
+    /// snap it to its tile grid. Shown at once while zooming and panning.
+    private func targetRegion() -> Region? {
+        guard image != nil, loadError == nil,
+              let wanted = PreviewGeometry.requestRegion(visible: visible, imageSize: imageSize, operation: operation)
+        else { return nil }
+        if let p = preview, p.operation == operation, p.strength == effectiveStrength,
+           PreviewGeometry.covers(p.region, wanted) {
+            return p.region
+        }
+        guard let tile = server.capabilities?.limits.tileSize, storedSize.width > 0 else { return wanted }
+        return TileGrid.snap(wanted, storedWidth: storedSize.width, storedHeight: storedSize.height,
+                             orientation: orientation, tile: tile)
+    }
+
+    private func updatePreviewBox() {
+        let state: CompareView.BoxState
+        switch previewState {
+        case .rendering: state = .rendering
+        case .failed: state = .failed
+        default: state = targetRegion() == preview?.region && previewIsCurrent ? .ready : .pending
+        }
+        viewport?.setPreviewBox(targetRegion(), state: state)
     }
 
     private func settingsChanged() {
         if export.isRunning { return }
         if case .done = export { export = .idle }
         if case .failed = export { export = .idle }
+        updatePreviewBox()
         schedulePreview(after: 0.25)
     }
 
