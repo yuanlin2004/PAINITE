@@ -95,7 +95,7 @@ OPERATION_PARAMS = {
     "denoise": {"strength": {"min": 0.0, "max": 1.0, "default": 0.5}},
     "sharpen": {"strength": {"min": 0.0, "max": 1.0, "default": 0.5}},
     "upscale2x": {},
-    "face": {"strength": {"min": 0.0, "max": 1.0, "default": 0.7}},
+    "face": {"strength": {"min": 0.0, "max": 1.0, "default": 0.5}},
 }
 
 

@@ -184,3 +184,25 @@ def test_face_after_upscale_in_a_pipeline_matches_export(tmp_path, region):
     up = render(tmp_path, src, fake_face_model(), None, strength=0.0, job="up", before=before)
     np.testing.assert_allclose(full[260, 280].astype(int), (255 - up[260, 280].astype(int)) * 0.7
                                + up[260, 280].astype(int) * 0.3, atol=3)
+
+
+def test_gpen_restorer_loads_from_a_plain_state_dict_and_is_deterministic(tmp_path):
+    import torch
+
+    from painite_server.models.face_adapter import FaceModel
+    from painite_server.models.gpen_arch import FullGenerator
+
+    torch.manual_seed(0)
+    args = {"arch": "gpen", "size": 64, "style_dim": 32, "n_mlp": 2, "channel_multiplier": 1, "narrow": 0.0625}
+    net = FullGenerator(64, 32, 2, 1, narrow=0.0625)
+    torch.save(net.state_dict(), tmp_path / "gpen.pth")
+    from painite_server.models.face_adapter import _build_retinaface
+
+    torch.save(_build_retinaface().state_dict(), tmp_path / "det.pth")
+    m = FaceModel(id="face/gpen-tiny@1.0.0", operation="face", version="1.0.0", device="cpu",
+                  detector_path=tmp_path / "det.pth", restorer_path=tmp_path / "gpen.pth",
+                  config={"detector": "det.pth", "restorer": "gpen.pth", "restorer_args": args, "face_size": 64})
+    m.load()
+    x = torch.rand(1, 3, 64, 64)
+    a, b = m._restore(x), m._restore(x)
+    assert a.shape == x.shape and torch.equal(a, b)

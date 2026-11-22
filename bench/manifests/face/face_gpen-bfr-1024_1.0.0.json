@@ -2,7 +2,7 @@
   "id": "face/gpen-bfr-1024@1.0.0",
   "adapter": "face",
   "scale": 1,
-  "description": "GPEN-BFR-1024 face restoration with RetinaFace-R50 detection (bake-off pick, bench/FACE_BAKEOFF.md). Needs the GPEN arch in the adapter (not loadable by spandrel).",
+  "description": "GPEN-BFR-1024 face restoration with RetinaFace-R50 detection (bake-off pick, bench/FACE_BAKEOFF.md).",
   "license": {
     "name": "Apache-2.0 (ModelScope model card); no license file in yangxy/GPEN",
     "url": "https://modelscope.cn/models/iic/cv_gpen_image-portrait-enhancement-hires"
@@ -40,8 +40,7 @@
     "max_face": 1024,
     "mask_inset": 0.05,
     "mask_feather": 0.12,
-    "color_anchor_sigma": 16,
-    "default_strength": 0.5
+    "color_anchor_sigma": 16
   },
   "default": true
 }

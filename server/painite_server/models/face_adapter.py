@@ -16,10 +16,10 @@ Manifest config:
 
     "config": {
       "detector": "detection_Resnet50_Final.pth",   # RetinaFace-ResNet50 (facexlib)
-      "restorer": "GFPGANv1.4.pth",                 # loaded through spandrel
-      "restorer_args": {"weight": 0.7},             # CodeFormer fidelity, ...
+      "restorer": "GPEN-BFR-1024.pth",              # spandrel-loadable, or GPEN (below)
+      "restorer_args": {"arch": "gpen", "size": 1024},  # or {"weight": 0.8} for CodeFormer
       "dtype": "fp16",                              # restorer dtype: fp16 | bf16 | fp32
-      "face_size": 512,                             # restorer input/output size
+      "face_size": 1024,                            # restorer input/output size
       "detect_long_side": 2048,                     # detection runs on this downscale
       "detect_threshold": 0.9,
       "min_face": 24,                               # skip faces smaller than this (px)
@@ -263,22 +263,33 @@ class FaceModel(Model):
             det.load_state_dict(sd, strict=True)
             self._det = det.to(self.device).eval()
 
-            desc = spandrel.ModelLoader().load_from_file(str(self.restorer_path))
+            args = self.config.get("restorer_args", {})
             dtype = self.config.get("dtype", "fp16")
-            if dtype == "fp16" and not desc.supports_half:
-                dtype = "bf16" if desc.supports_bfloat16 else "fp32"
+            if args.get("arch") == "gpen":
+                # GPEN is not in spandrel; build its generator from the vendored code.
+                from .gpen_arch import FullGenerator  # noqa: PLC0415
+
+                net = FullGenerator(int(args.get("size", 1024)), int(args.get("style_dim", 512)),
+                                    int(args.get("n_mlp", 8)), int(args.get("channel_multiplier", 2)),
+                                    narrow=float(args.get("narrow", 1)))
+                net.load_state_dict(torch.load(str(self.restorer_path), map_location="cpu", weights_only=True))
+                self._arch, arch_name = "GPEN", "GPEN"
+            else:
+                desc = spandrel.ModelLoader().load_from_file(str(self.restorer_path))
+                net, self._arch, arch_name = desc.model, desc.architecture.id, desc.architecture.name
+                if dtype == "fp16" and not desc.supports_half:
+                    dtype = "bf16" if desc.supports_bfloat16 else "fp32"
+            if self._arch == "CodeFormer":
+                dtype = "fp32"  # its codebook lookup fails in fp16 and bf16
             if self.device == "cpu":
                 dtype = "fp32"
             self._dtype = {"fp16": torch.float16, "bf16": torch.bfloat16, "fp32": torch.float32}[dtype]
-            desc.to(self.device).eval()
-            desc.model.to(self._dtype)
+            net.to(self.device, self._dtype).eval()
             from .spandrel_adapter import configure_determinism  # noqa: PLC0415
 
             configure_determinism()
-            self._arch = desc.architecture.id
-            self._net = desc
-            log.info("loaded %s (detector RetinaFace-R50, restorer %s, %s, %s)", self.id, desc.architecture.name,
-                     self.device, dtype)
+            self._net = net
+            log.info("loaded %s (detector RetinaFace-R50, restorer %s, %s, %s)", self.id, arch_name, self.device, dtype)
 
     # Detection -------------------------------------------------------------
 
@@ -371,7 +382,7 @@ class FaceModel(Model):
         torch = _torch()
         args = dict(self.config.get("restorer_args", {}))
         x = (crop * 2 - 1).to(self._dtype)
-        net = self._net.model
+        net = self._net
         with torch.inference_mode():
             if self._arch == "GFPGAN":
                 y = net(x, return_rgb=False, randomize_noise=False)[0]
