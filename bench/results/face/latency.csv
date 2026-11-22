@@ -1,0 +1,57 @@
+what,model,dtype,sec,faces,peak_gb
+detect 24MP long side 1024,retinaface-r50,fp32,0.03268540099816164,11,
+detect 24MP long side 2048,retinaface-r50,fp32,0.1396361639999668,14,
+detect 24MP long side full,retinaface-r50,fp32,1.3858804219999001,13,
+parse mask per face,parsenet,fp32,0.062126821001584176,1,
+"24MP, 1 face (incl. detection)",gpen-1024+anchor8,fp32,0.81825752900113,1,
+"24MP, 10 faces (incl. detection)",gpen-1024+anchor8,fp32,3.34641263949743,10,
+preview 1024x1024 region (detection cached),gpen-1024+anchor8,fp32,0.2600493380014086,1,
+restore one face,gpen-1024+anchor8,fp32,0.17498965800041333,1,12.122902016
+"24MP, 1 face (incl. detection)",gpen-1024,fp32,0.7451292315017781,1,
+"24MP, 10 faces (incl. detection)",gpen-1024,fp32,2.662172084499616,10,
+preview 1024x1024 region (detection cached),gpen-1024,fp32,0.19690283299860312,1,
+restore one face,gpen-1024,fp32,0.10491876800369937,1,12.123088384
+"24MP, 1 face (incl. detection)",gpen-512,fp32,0.6920551149960374,1,
+"24MP, 10 faces (incl. detection)",gpen-512,fp32,1.9583904015016742,10,
+preview 1024x1024 region (detection cached),gpen-512,fp32,0.12688660900312243,1,
+restore one face,gpen-512,fp32,0.05786109199834755,1,6.58574848
+"24MP, 1 face (incl. detection)",gpen-512,fp16,0.6951460339987534,1,
+"24MP, 10 faces (incl. detection)",gpen-512,fp16,1.8191076120019716,10,
+preview 1024x1024 region (detection cached),gpen-512,fp16,0.10176279600273119,1,
+restore one face,gpen-512,fp16,0.03019034300086787,1,4.055340032
+"24MP, 1 face (incl. detection)",gpen-2048,fp32,0.8896104190025653,1,
+"24MP, 10 faces (incl. detection)",gpen-2048,fp32,3.9401082254989888,10,
+preview 1024x1024 region (detection cached),gpen-2048,fp32,0.29700319000403397,1,
+restore one face,gpen-2048,fp32,0.20241679799801204,1,23.582695424
+"24MP, 1 face (incl. detection)",gpen-2048,fp16,0.749793711998791,1,
+"24MP, 10 faces (incl. detection)",gpen-2048,fp16,3.031616212003428,10,
+preview 1024x1024 region (detection cached),gpen-2048,fp16,0.20412606299942126,1,
+restore one face,gpen-2048,fp16,0.11034715300047537,1,13.009349632
+"24MP, 1 face (incl. detection)",codeformer-w0.8,fp32,0.7716644215033739,1,
+"24MP, 10 faces (incl. detection)",codeformer-w0.8,fp32,2.3790855039987946,10,
+preview 1024x1024 region (detection cached),codeformer-w0.8,fp32,0.21190921300149057,1,
+restore one face,codeformer-w0.8,fp32,0.10685907599690836,1,6.097353728
+"24MP, 1 face (incl. detection)",gfpgan-1.4,fp32,0.9667266374963219,1,
+"24MP, 10 faces (incl. detection)",gfpgan-1.4,fp32,2.0051520964989322,10,
+preview 1024x1024 region (detection cached),gfpgan-1.4,fp32,0.12601206100225681,1,
+restore one face,gfpgan-1.4,fp32,0.05583676200330956,1,7.342803456
+"24MP, 1 face (incl. detection)",gfpgan-1.4,fp16,0.7181686790027015,1,
+"24MP, 10 faces (incl. detection)",gfpgan-1.4,fp16,2.8485758649949275,10,
+preview 1024x1024 region (detection cached),gfpgan-1.4,fp16,0.19297989400365623,1,
+restore one face,gfpgan-1.4,fp16,0.026623562000168022,1,4.484719616
+"24MP, 1 face (incl. detection)",restoreformer++,fp32,1.5861845789986546,1,
+"24MP, 10 faces (incl. detection)",restoreformer++,fp32,2.380893825000385,10,
+preview 1024x1024 region (detection cached),restoreformer++,fp32,0.22099653299665079,1,
+restore one face,restoreformer++,fp32,0.23489142500329763,1,7.036811264
+"24MP, 1 face (incl. detection)",restoreformer++,fp16,0.7408386175011401,1,
+"24MP, 10 faces (incl. detection)",restoreformer++,fp16,1.8131016719999025,10,
+preview 1024x1024 region (detection cached),restoreformer++,fp16,0.1712959719952778,1,
+restore one face,restoreformer++,fp16,0.06527532000473002,1,4.434290176
+"24MP, 1 face (incl. detection)",pmrf,fp32,5.20373442699929,1,
+"24MP, 10 faces (incl. detection)",pmrf,fp32,49.64721371199994,10,
+preview 1024x1024 region (detection cached),pmrf,fp32,4.626185452994832,1,
+restore one face,pmrf,fp32,4.560327254002914,1,9.897731584
+"24MP, 1 face (incl. detection)",osdface,fp16,0.8588377740015858,1,
+"24MP, 10 faces (incl. detection)",osdface,fp16,3.412425477494253,10,
+preview 1024x1024 region (detection cached),osdface,fp16,0.31151817900536116,1,
+restore one face,osdface,fp16,0.21360712800378678,1,3.637438464

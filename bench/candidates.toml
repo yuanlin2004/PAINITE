@@ -503,3 +503,154 @@ sha256 = "d538a2cb925451fab1f75adfe715ac2b1c8bb12fa32a0851ba01be2347b354d6"
 license = "HYPIR Software License (non-commercial); SD2.1 CreativeML Open RAIL++-M"
 precomputed = "hypir_raw/result"
 anchor = 8
+
+# Face restoration (bench/face/, FACE_BAKEOFF.md). Files live under weights/face/.
+# Spandrel loads GFPGAN, RestoreFormer and CodeFormer; RestoreFormer++, GPEN, PMRF and OSDFace
+# need their upstream arch code, cloned to $PAINITE_BENCH_DIR/src (see bench/face/README section).
+[[model]]
+id = "face/gfpgan-1.4"
+op = "face"
+file = "face/GFPGANv1.4.pth"
+url = "https://github.com/TencentARC/GFPGAN/releases/download/v1.3.0/GFPGANv1.4.pth"
+upstream = "https://github.com/TencentARC/GFPGAN"
+sha256 = "e2cd4703ab14f4d01fd1383a8a8b266f9a5833dacee8e6a79d3bf21a1b6be5ad"
+license = "Apache-2.0"
+
+[[model]]
+id = "face/restoreformer"
+op = "face"
+file = "face/RestoreFormer.pth"
+url = "https://github.com/TencentARC/GFPGAN/releases/download/v1.3.4/RestoreFormer.pth"
+upstream = "https://github.com/wzhouxiff/RestoreFormer"
+sha256 = "07404d446d62ca3d5ed38b1de09a947a1e77d46dbccec961a74d713a8f24ace0"
+license = "Apache-2.0"
+
+[[model]]
+id = "face/restoreformer++"
+op = "face"
+file = "face/RestoreFormer++.ckpt"
+url = "https://github.com/wzhouxiff/RestoreFormerPlusPlus/releases/download/v1.0.0/RestoreFormer++.ckpt"
+upstream = "https://github.com/wzhouxiff/RestoreFormerPlusPlus"
+sha256 = "613fe52805f86bf8c2bffff08ae9f7a0b99f408be1bf221767af6183038be3a2"
+license = "Apache-2.0"
+
+[[model]]
+id = "face/codeformer"
+op = "face"
+file = "face/codeformer.pth"
+url = "https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/codeformer.pth"
+upstream = "https://github.com/sczhou/CodeFormer"
+sha256 = "1009e537e0c2a07d4cabce6355f53cb66767cd4b4297ec7a4a64ca4b8a5684b7"
+license = "S-Lab License 1.0 (non-commercial)"
+
+[[model]]
+id = "face/gpen-512"
+op = "face"
+file = "face/GPEN-BFR-512.pth"
+url = "https://public-vigen-video.oss-cn-shanghai.aliyuncs.com/robin/models/GPEN-BFR-512.pth"
+upstream = "https://github.com/yangxy/GPEN"
+sha256 = "f1002c41add95b0decad69604d80455576f7187dd99ca16bd611bcfd44c10b51"
+license = "No license file in yangxy/GPEN"
+
+[[model]]
+id = "face/gpen-1024"
+op = "face"
+file = "face/GPEN-BFR-1024.pth"
+url = "https://modelscope.cn/api/v1/models/iic/cv_gpen_image-portrait-enhancement-hires/repo?Revision=master&FilePath=pytorch_model.pt"
+upstream = "https://github.com/yangxy/GPEN"
+sha256 = "eeb799bdfcb86ce347f89cd7f286a901517d7e24d3123399d11a79f51329a8f9"
+license = "Apache-2.0 (ModelScope model card); no license file in yangxy/GPEN"
+
+[[model]]
+id = "face/gpen-2048"
+op = "face"
+file = "face/GPEN-BFR-2048.pth"
+url = "https://modelscope.cn/api/v1/models/iic/cv_gpen_image-portrait-enhancement-hires/repo?Revision=master&FilePath=pytorch_model-2048.pt"
+upstream = "https://github.com/yangxy/GPEN"
+sha256 = "b7c563db886b19f87f32b7e8a378121549571c9f092174f4b5c9c64e03babfaa"
+license = "Apache-2.0 (ModelScope model card); no license file in yangxy/GPEN"
+
+[[model]]
+id = "face/pmrf"
+op = "face"
+file = "face/PMRF_blind_face.safetensors"
+url = "https://huggingface.co/ohayonguy/PMRF_blind_face_image_restoration/resolve/main/model.safetensors"
+upstream = "https://github.com/ohayonguy/PMRF"
+sha256 = "0c88599689c752c8d6e05c0794f3d1d7c649cff88aa42a74c601d8ed480d174f"
+license = "MIT"
+
+# OSDFace: LoRA + LQ encoder from the authors' Google Drive folder (gdown --folder
+# 1Nci6KufB8t2Uj-6tobrw3S7kkfQUTLHV -> weights/face/osdface/), on SD 2.1-base (fp16 unet + vae
+# from ModelScope stabilityai/stable-diffusion-2-1-base -> weights/face/sd21base/). fetch.py does
+# not handle folders; the files are listed here for their checksums.
+[[model]]
+id = "face/osdface-lora"
+op = "face-aux"
+file = "face/osdface/pytorch_lora_weights.safetensors"
+url = "gdrive-folder:1Nci6KufB8t2Uj-6tobrw3S7kkfQUTLHV"
+upstream = "https://github.com/jkwang28/OSDFace"
+sha256 = "bf7095b4d79f3e991eb6b27774e44e23cbee73998e1e5afa0bfab5e8cb9c834e"
+license = "OSDFace Non-Commercial Academic Research License"
+
+[[model]]
+id = "face/osdface-encoder"
+op = "face-aux"
+file = "face/osdface/associate_2.ckpt"
+url = "gdrive-folder:1Nci6KufB8t2Uj-6tobrw3S7kkfQUTLHV"
+upstream = "https://github.com/jkwang28/OSDFace"
+sha256 = "d51ff7f0ddb0bd84b20b75b261ef01618ca6c3fded63f7b612be9e2d38257b23"
+license = "OSDFace Non-Commercial Academic Research License"
+
+[[model]]
+id = "face/osdface-embedding"
+op = "face-aux"
+file = "face/osdface/embedding_change_weights.pth"
+url = "gdrive-folder:1Nci6KufB8t2Uj-6tobrw3S7kkfQUTLHV"
+upstream = "https://github.com/jkwang28/OSDFace"
+sha256 = "3b13ab83fed678ed15cdc5acdf36a948630ea197a0d3bfcd693c040dd4d59876"
+license = "OSDFace Non-Commercial Academic Research License"
+
+[[model]]
+id = "face/sd21base-unet"
+op = "face-aux"
+file = "face/sd21base/unet/diffusion_pytorch_model.fp16.safetensors"
+url = "https://modelscope.cn/api/v1/models/stabilityai/stable-diffusion-2-1-base/repo?Revision=master&FilePath=unet/diffusion_pytorch_model.fp16.safetensors"
+upstream = "https://huggingface.co/stabilityai/stable-diffusion-2-1-base"
+sha256 = "28ec9cf3b239c0751c201b1f6fb46b551df5862731b30a37aa1360101cb3fbab"
+license = "CreativeML Open RAIL++-M"
+
+[[model]]
+id = "face/sd21base-vae"
+op = "face-aux"
+file = "face/sd21base/vae/diffusion_pytorch_model.fp16.safetensors"
+url = "https://modelscope.cn/api/v1/models/stabilityai/stable-diffusion-2-1-base/repo?Revision=master&FilePath=vae/diffusion_pytorch_model.fp16.safetensors"
+upstream = "https://huggingface.co/stabilityai/stable-diffusion-2-1-base"
+sha256 = "3e4c08995484ee61270175e9e7a072b66a6e4eeb5f0c266667fe1f45b90daf9a"
+license = "CreativeML Open RAIL++-M"
+
+[[model]]
+id = "face/retinaface-r50"
+op = "face-aux"
+file = "face/detection_Resnet50_Final.pth"
+url = "https://github.com/xinntao/facexlib/releases/download/v0.1.0/detection_Resnet50_Final.pth"
+upstream = "https://github.com/xinntao/facexlib"
+sha256 = "6d1de9c2944f2ccddca5f5e010ea5ae64a39845a86311af6fdf30841b0a5a16d"
+license = "MIT"
+
+[[model]]
+id = "face/parsenet"
+op = "face-aux"
+file = "face/parsing_parsenet.pth"
+url = "https://github.com/xinntao/facexlib/releases/download/v0.2.2/parsing_parsenet.pth"
+upstream = "https://github.com/xinntao/facexlib"
+sha256 = "3d558d8d0e42c20224f13cf5a29c79eba2d59913419f945545d8cf7b72920de2"
+license = "MIT"
+
+[[model]]
+id = "face/arcface-buffalo-l"
+op = "face-aux"
+file = "face/buffalo_l.zip"
+url = "https://github.com/deepinsight/insightface/releases/download/v0.7/buffalo_l.zip"
+upstream = "https://github.com/deepinsight/insightface"
+sha256 = "80ffe37d8a5940d59a7384c201a2a38d4741f2f3c51eef46ebb28218a7b0ca2f"
+license = "Non-commercial research (insightface pretrained models); metric only, not shipped"

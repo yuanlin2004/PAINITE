@@ -37,6 +37,11 @@ def _display_to_stored(dx: int, dy: int, w: int, h: int, o: int) -> tuple[int, i
     }[o]
 
 
+def display_point_to_stored(x: float, y: float, w: int, h: int, o: int) -> tuple[float, float]:
+    """A displayed-pixel point (pixel-center coordinates, may be fractional) in stored pixels."""
+    return _display_to_stored(x, y, w, h, o)
+
+
 def _stored_to_display(sx: int, sy: int, w: int, h: int, o: int) -> tuple[int, int]:
     return {
         1: (sx, sy),

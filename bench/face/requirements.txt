@@ -1,0 +1,10 @@
+# Face bake-off extras, on top of ../requirements.txt (bench venv, Python 3.12, torch 2.14 cu130).
+# The pick itself (GPEN-1024 + the server adapter's RetinaFace) needs none of these.
+facexlib==0.3.0          # RetinaFace + parsenet in the harness (pulls filterpy, numba, scipy)
+insightface==2.1         # ArcFace identity metric (buffalo_l w600k_r50, run with onnxruntime)
+onnxruntime==1.32.0
+pyarrow==26.0.1          # CelebA-HQ parquet
+diffusers==0.43.0        # OSDFace (SD 2.1-base UNet/VAE)
+pytorch-lightning==2.6.6 # only to unpickle OSDFace's associate_2.ckpt
+safetensors==0.8.0
+einops==0.8.2            # PMRF

@@ -25,7 +25,7 @@ from typing import Any
 
 log = logging.getLogger("painite.models")
 
-ID_RE = re.compile(r"^(denoise|sharpen|unblur_motion|unblur_focus|upscale2x)/([a-z0-9][a-z0-9._-]*)@([0-9A-Za-z.+-]+)$")
+ID_RE = re.compile(r"^(denoise|sharpen|unblur_motion|unblur_focus|upscale2x|face)/([a-z0-9][a-z0-9._-]*)@([0-9A-Za-z.+-]+)$")
 MANIFEST = "manifest.json"
 
 

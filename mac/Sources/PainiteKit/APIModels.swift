@@ -10,7 +10,7 @@ public enum Operation: String, Codable, CaseIterable, Sendable, Identifiable {
     /// with a Motion / Focus switch.
     case unblurMotion = "unblur_motion"
     case unblurFocus = "unblur_focus"
-    case upscale2x
+    case upscale2x, face
 
     public var id: String { rawValue }
 
@@ -21,6 +21,7 @@ public enum Operation: String, Codable, CaseIterable, Sendable, Identifiable {
         case .unblurMotion: "Unblur Motion"
         case .unblurFocus: "Unblur Focus"
         case .upscale2x: "Upscale 2×"
+        case .face: "Enhance faces"
         }
     }
 
@@ -30,7 +31,7 @@ public enum Operation: String, Codable, CaseIterable, Sendable, Identifiable {
     public var isUnblur: Bool { self == .unblurMotion || self == .unblurFocus }
 
     /// What the Add Step menu offers. Unblur is added as Motion and switched on the step.
-    public static let addable: [Operation] = [.denoise, .sharpen, .unblurMotion, .upscale2x]
+    public static let addable: [Operation] = [.denoise, .sharpen, .unblurMotion, .upscale2x, .face]
 
     /// Output pixels per input pixel along each axis.
     public var scale: Int { self == .upscale2x ? 2 : 1 }

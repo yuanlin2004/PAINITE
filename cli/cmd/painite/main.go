@@ -36,7 +36,7 @@ const (
 const usage = `painite enhances photos on a PAINITE inference server.
 
 Usage:
-  painite enhance --op <denoise|sharpen|unblur_motion|unblur_focus|upscale2x> [--strength 0..1] -o <file|dir> [flags] <input>...
+  painite enhance --op <denoise|sharpen|unblur_motion|unblur_focus|upscale2x|face> [--strength 0..1] -o <file|dir> [flags] <input>...
   painite enhance --op denoise:0.6,sharpen:0.3,upscale2x -o <file|dir> [flags] <input>...   (pipeline)
   painite trust --fingerprint SHA256:<hex>
   painite status [--json]
@@ -155,9 +155,9 @@ func cmdEnhance(args []string, stdout, stderr io.Writer) int {
 		strength                  optionalFloat
 		conn                      connFlags
 	)
-	fs.StringVar(&op, "op", "", "operation: denoise, sharpen, unblur_motion, unblur_focus, or upscale2x (required); a comma-separated list runs\n"+
+	fs.StringVar(&op, "op", "", "operation: denoise, sharpen, unblur_motion, unblur_focus, upscale2x, or face (required); a comma-separated list runs\n"+
 		"a pipeline in one job, and op:strength sets one step's strength, e.g. denoise:0.6,sharpen:0.3,upscale2x")
-	fs.Var(&strength, "strength", "strength 0..1 for denoise, sharpen and unblur steps without their own (default: server default)")
+	fs.Var(&strength, "strength", "strength 0..1 for denoise, sharpen, unblur and face steps without their own (default: server default)")
 	fs.StringVar(&model, "model", "", "model ID to pin, single operation only (default: server default for the operation)")
 	fs.StringVar(&format, "format", "", "output format: jpeg or tiff (default: same as input, or from -o's extension)")
 	fs.IntVar(&quality, "jpeg-quality", 92, "JPEG quality 1..100")
@@ -482,11 +482,12 @@ func cmdTrust(args []string, stdout, stderr io.Writer) int {
 const maxSteps = 4
 
 // strengthOps take a strength; other known operations don't.
-var strengthOps = map[string]bool{"denoise": true, "sharpen": true, "unblur_motion": true, "unblur_focus": true}
+var strengthOps = map[string]bool{"denoise": true, "sharpen": true, "unblur_motion": true, "unblur_focus": true,
+	"face": true}
 var knownOps = map[string]bool{"denoise": true, "sharpen": true, "unblur_motion": true, "unblur_focus": true,
-	"upscale2x": true}
+	"upscale2x": true, "face": true}
 
-const opList = "denoise, sharpen, unblur_motion, unblur_focus, or upscale2x"
+const opList = "denoise, sharpen, unblur_motion, unblur_focus, upscale2x, or face"
 
 // parseSteps reads --op: "denoise", or a pipeline "denoise:0.6,sharpen,upscale2x".
 // defaultStrength applies to strength steps that don't set their own.
@@ -535,7 +536,7 @@ func parseSteps(spec string, defaultStrength *float64) ([]enhance.Step, error) {
 			any = any || strengthOps[st.Operation]
 		}
 		if !any {
-			return nil, fmt.Errorf("--strength applies only to denoise, sharpen, unblur_motion and unblur_focus")
+			return nil, fmt.Errorf("--strength applies only to denoise, sharpen, unblur_motion, unblur_focus and face")
 		}
 	}
 	return steps, nil

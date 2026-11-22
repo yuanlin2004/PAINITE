@@ -37,7 +37,7 @@ struct DocumentView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.leading, 12)
             HStack(spacing: 6) {
-                Text("Enhanced")
+                Text(isEnhancing ? "Enhancing…" : "Enhanced")
                 previewBadge
                 Spacer()
                 zoomControls
@@ -50,11 +50,15 @@ struct DocumentView: View {
         .background(.bar)
     }
 
+    private var isEnhancing: Bool {
+        if case .rendering = model.previewState { return true }
+        return false
+    }
+
     @ViewBuilder private var previewBadge: some View {
         switch model.previewState {
         case .rendering(let p):
             ProgressView(value: p).progressViewStyle(.linear).frame(width: 60)
-            Text("Updating…").foregroundStyle(.secondary)
         case .failed:
             Label("Preview failed", systemImage: "exclamationmark.triangle.fill")
                 .foregroundStyle(.orange)
@@ -261,8 +265,8 @@ struct DocumentView: View {
         case .idle: EmptyView()
         case .hashing: Text("Checking the server for this photo…")
         case .uploading(let p):
-            ProgressView(value: p) { Text("Uploading original… \(Int(p * 100))%") }
-        case .ready: Text("Original is on the server")
+            ProgressView(value: p) { Text("Uploading photo… \(Int(p * 100))%") }
+        case .ready: Text("Photo uploaded to server")
         case .failed(let msg): Text(msg).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
         }
     }

@@ -37,7 +37,11 @@ def main():
     for c in candidates(a.op, a.models):
         if c.baseline:
             continue
-        if not c.path.exists():
+        if c.url and c.url.startswith("gdrive-folder:"):
+            if not c.path.exists():
+                print(f"{c.id:40s} missing: gdown --folder {c.url.removeprefix('gdrive-folder:')} -O {c.path.parent}")
+                continue
+        elif not c.path.exists():
             print(f"fetch {c.id} <- {c.url or 'gdrive:' + c.gdrive}")
             tmp = c.path.with_suffix(".part")
             c.path.parent.mkdir(parents=True, exist_ok=True)

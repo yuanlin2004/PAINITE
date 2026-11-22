@@ -70,3 +70,33 @@ grid tile that touches it (3×3 tiles), so it matches the export pixel for pixel
 **Reference tools.** The PRD asks for comparison against existing tools (Lightroom Denoise,
 Topaz). Those do not run on Linux, so classical baselines stand in here (OpenCV non-local means,
 unsharp mask, Lanczos). A side-by-side against Lightroom on real high-ISO raws is a follow-up on the Mac.
+
+## Face bake-off
+
+Face restoration (the "face" op) has its own harness in `face/`. The decision is in
+[`FACE_BAKEOFF.md`](FACE_BAKEOFF.md) and the tables are in `results/face/`.
+
+```sh
+uv pip install -r face/requirements.txt
+python fetch.py --op face && python fetch.py --op face-aux    # weights -> $PAINITE_BENCH_DIR/weights/face
+# Upstream arch code for the models spandrel does not load (read before running):
+git clone --depth 1 https://github.com/yangxy/GPEN                        $PAINITE_BENCH_DIR/src/GPEN
+git clone --depth 1 https://github.com/wzhouxiff/RestoreFormerPlusPlus    $PAINITE_BENCH_DIR/src/RestoreFormerPlusPlus
+git clone --depth 1 https://github.com/ohayonguy/PMRF                     $PAINITE_BENCH_DIR/src/PMRF
+git clone --depth 1 https://github.com/jkwang28/OSDFace                   $PAINITE_BENCH_DIR/src/OSDFace
+unzip $PAINITE_BENCH_DIR/weights/face/buffalo_l.zip -d $PAINITE_BENCH_DIR/weights/face/buffalo_l
+# Test data (never committed): CelebA-HQ validation split from HF mattymchen/celeba-hq
+curl -L -o $PAINITE_BENCH_DIR/data/face/celebahq_val.parquet \
+  https://huggingface.co/datasets/mattymchen/celeba-hq/resolve/main/data/validation-00000-of-00001-a47eeed86041f01b.parquet
+
+python face/make_testset.py         # 100 aligned faces x {mild, heavy}
+python face/fetch_real.py           # 19 Commons photos listed in face/real_photos.txt (+ sources.csv)
+python face/quality.py              # synthetic: PSNR, LPIPS, DISTS, ArcFace identity, MUSIQ, CLIP-IQA
+python face/real.py                 # real photos: full pipeline, no-reference scores, identity drift, crops
+python face/largeface.py            # face-size policy
+python face/strength.py             # strength sweep (from quality.py outputs)
+python face/masks.py --model gpen-1024+anchor8
+python face/latency.py
+python face/adapter_check.py        # server face_adapter vs bench pipeline
+python face/summarize.py            # results/face/summary.md
+```
