@@ -203,3 +203,303 @@ upstream = "https://github.com/cszn/SCUNet"
 sha256 = "892c83f812c59173273b74f4f34a14ecaf57a2fdb68df056664589beb55c966e"
 license = "Apache-2.0"
 anchor = 8
+
+# ---------------------------------------------------------------------------------------------
+# Unblur: real motion blur (camera shake, subject motion) and defocus. See UNBLUR.md.
+# Weights live in $PAINITE_BENCH_DIR/weights/unblur/. `arch` = not in spandrel, built from a
+# pinned upstream clone by painite_bench/arches.py (fetch.py --src). `trained_on` is recorded
+# because RealBlur-trained checkpoints generalize to real photos much better than GoPro ones.
+
+[[model]]
+id = "unblur/fftformer-gopro"
+dtype = "bf16"  # dtype_check.py: fp16 output is broken (~10 dB vs fp32), bf16 is fine
+op = "unblur"
+trained_on = "GoPro"
+file = "unblur/fftformer_GoPro.pth"
+url = "https://github.com/kkkls/FFTformer/releases/download/pretrain_model/fftformer_GoPro.pth"
+upstream = "https://github.com/kkkls/FFTformer"
+sha256 = "336717b7c4e97b66af112cc7878106cb185b698bd872c2a8247911507540b2a3"
+license = "MIT"
+
+[[model]]
+id = "unblur/fftformer-realblurj"
+dtype = "bf16"  # dtype_check.py: fp16 output is broken (~10 dB vs fp32), bf16 is fine
+op = "unblur"
+trained_on = "RealBlur-J"
+file = "unblur/fftformer_RealBlur_J.pth"
+gdrive = "1ujZzfTHwaikEgp3lrSFWAtdj-7Hcl2xl"
+upstream = "https://github.com/kkkls/FFTformer"
+sha256 = "c687ba8a26e7af7a5fa4ed30c66c7af35eacf7469584a8f6b105227130b30c3a"
+license = "MIT"
+
+[[model]]
+id = "unblur/idblau-fftformer-realblurj"
+dtype = "bf16"  # dtype_check.py: fp16 output is broken (~10 dB vs fp32), bf16 is fine
+op = "unblur"
+trained_on = "RealBlur-J + ID-Blau blur augmentation"
+file = "unblur/idblau_fftformer_RealBlur_J.pth"
+gdrive = "1dKXHxFXCb-s3vuACiA4JUxpSkaJm2FRK"
+upstream = "https://github.com/plusgood-steven/ID-Blau"
+sha256 = "effe1ff91e657960fa3f57d3ab908c33d691aa4f646daad97abb20bcdd30a880"
+license = "MIT (FFTformer); ID-Blau repo states none"
+
+[[model]]
+id = "unblur/idblau-restormer-realblurj"
+op = "unblur"
+trained_on = "RealBlur-J + ID-Blau blur augmentation"
+file = "unblur/idblau_restormer_RealBlur_J.pth"
+gdrive = "1smDTacV2-5nhJrbDyJ3i397vQz77tRFx"
+upstream = "https://github.com/plusgood-steven/ID-Blau"
+sha256 = "c7495eaaea3d0edc70d3a71a1c876a578987630e1888b81334824292a86b866a"
+license = "Academic, non-commercial (Restormer LICENSE.md)"
+
+[[model]]
+id = "unblur/restormer-motion"
+op = "unblur"
+trained_on = "GoPro"
+file = "Restormer-motion_deblurring.pth"
+url = "https://github.com/swz30/Restormer/releases/download/v1.0/motion_deblurring.pth"
+upstream = "https://github.com/swz30/Restormer"
+sha256 = "194e38fb5b607c9dc5a5b3e08e65b2e79ee2bf0ef5048e0612f6b2ff2f79da31"
+license = "Academic, non-commercial (Restormer LICENSE.md)"
+
+[[model]]
+id = "unblur/nafnet-gopro-w64"
+op = "unblur"
+trained_on = "GoPro"
+file = "NAFNet-GoPro-width64.pth"
+url = "https://huggingface.co/nyanko7/nafnet-models/resolve/main/NAFNet-GoPro-width64.pth"
+upstream = "https://github.com/megvii-research/NAFNet"
+sha256 = "329d3ab4077b8d6b7ff61de376e483714667960bf85be027bf4335cda701196f"
+license = "MIT"
+
+[[model]]
+id = "unblur/nafnet-reds-w64"
+op = "unblur"
+trained_on = "REDS (video blur + JPEG)"
+file = "NAFNet-REDS-width64.pth"
+url = "https://huggingface.co/nyanko7/nafnet-models/resolve/main/NAFNet-REDS-width64.pth"
+upstream = "https://github.com/megvii-research/NAFNet"
+sha256 = "175fe8b3cdf3abedfbc87769779c3d9f491e05bb2e73ea9d627883f90a4b2df3"
+license = "MIT"
+
+[[model]]
+id = "unblur/grl-b-realblurj"
+op = "unblur"
+trained_on = "RealBlur-J"
+file = "unblur/grl_b_motion_realblur_j.ckpt"
+url = "https://github.com/ofsoundof/GRL-Image-Restoration/releases/download/v1.0.0/db_motion_grl_base_realblur_j.ckpt"
+upstream = "https://github.com/ofsoundof/GRL-Image-Restoration"
+sha256 = "a1f83acfd8e13fb99010ab1539bca9619e5125e80f212cffee4328aaa00959da"
+license = "MIT"
+
+[[model]]
+id = "unblur/grl-b-gopro"
+op = "unblur"
+trained_on = "GoPro"
+file = "unblur/grl_b_motion_gopro.ckpt"
+url = "https://github.com/ofsoundof/GRL-Image-Restoration/releases/download/v1.0.0/db_motion_grl_base_gopro.ckpt"
+upstream = "https://github.com/ofsoundof/GRL-Image-Restoration"
+sha256 = "032f797d9f22a218e49569c9d2caef8cfb862348a83bd7a5b0cf5bab34244dbf"
+license = "MIT"
+
+[[model]]
+id = "unblur/mprnet-gopro"
+op = "unblur"
+trained_on = "GoPro"
+file = "unblur/mprnet_deblur_gopro.pth"
+gdrive = "1QwQUVbk6YVOJViCsOKYNykCsdJSVGRtb"
+upstream = "https://github.com/swz30/MPRNet"
+sha256 = "70a45be8899bc168bea8dae14be56f90b2343d7f674ee8c52d53ac51d6cb144b"
+license = "none stated"
+
+[[model]]
+id = "unblur/stripformer-realblurj"
+dtype = "fp16"  # dtype_check.py: fp16 matches fp32 to >70 dB
+op = "unblur"
+arch = "stripformer"
+trained_on = "RealBlur-J"
+file = "unblur/stripformer_RealBlur_J.pth"
+gdrive = "14IiYBFyNTb15FoGQgIkhJqIx62F-_2t-"
+upstream = "https://github.com/pp00704831/Stripformer-ECCV-2022-"
+sha256 = "039afcc6d99ae6eae7c9c4894635d82a055e5ec00bdd6462e80e7dfc4b0875f3"
+license = "MIT-style, non-commercial use only"
+
+[[model]]
+id = "unblur/ufpnet-realblurj"
+op = "unblur"
+arch = "ufpnet"
+trained_on = "RealBlur-J"
+file = "unblur/ufpnet_RealBlur_J.pth"
+gdrive = "19GgXdBEU2BXNPvhNg8lHNmV3b_N9g0Ao"
+upstream = "https://github.com/Fangzhenxuan/UFPDeblur"
+sha256 = "cac348d2c6afd55b01b51ad80b147d4a86f2d95135a680388f622c0bd983b1fa"
+license = "none stated"
+
+[[model]]
+id = "unblur/mlwnet-realblurj"
+op = "unblur"
+arch = "mlwnet"
+trained_on = "RealBlur-J"
+file = "unblur/mlwnet_w64_RealBlur_J.pth"
+gdrive = "1lv3MCJgZUWgITUFNvgY8nU9YlpgE050W"
+upstream = "https://github.com/thqiu0419/MLWNet"
+sha256 = "113ba87dab255b2ffdf9b8e5026d2d1b1c83d0a756f18c4d3db73ab52b34156c"
+license = "MIT"
+
+[[model]]
+id = "unblur/mlwnet-gopro"
+op = "unblur"
+arch = "mlwnet"
+trained_on = "GoPro"
+file = "unblur/mlwnet_w64_GoPro.pth"
+gdrive = "15SjPtkfQ0m6NuVss0rwvscatKwRZ2l4i"
+upstream = "https://github.com/thqiu0419/MLWNet"
+sha256 = "de368cc6484aceb8c304e313176bc56330f0a3413d500ab0cf62b81b829dea08"
+license = "MIT"
+
+[[model]]
+id = "unblur/evssm-realblurj"
+op = "unblur"
+arch = "evssm"
+trained_on = "RealBlur-J"
+file = "unblur/evssm_RealBlur_J.pth"
+gdrive = "1cItSJH6zGJjsWxGMM0jr1S0bOFZuP6gp"
+upstream = "https://github.com/kkkls/EVSSM"
+sha256 = "a78d1d4537a8966259dd2793ce6b91a3fd6983f66a6ffb3c04644822dd78c65e"
+license = "MIT"
+
+[[model]]
+id = "unblur/evssm-gopro"
+op = "unblur"
+arch = "evssm"
+trained_on = "GoPro"
+file = "unblur/evssm_GoPro.pth"
+gdrive = "1SN5CoNEiBa_pXojD4K661FbYkYFSyLFs"
+upstream = "https://github.com/kkkls/EVSSM"
+sha256 = "215ce276f27c806259a92b741b66ef61b5d86d068c7efbcb2757a5eea2d0fc19"
+license = "MIT"
+
+[[model]]
+id = "unblur/loformer-realblurj"
+op = "unblur"
+arch = "loformer"
+trained_on = "RealBlur-J"
+file = "unblur/loformer_RealBlur_J.pth"
+gdrive = "1gdEWpOJMIqYL5lQCLsl5zi7xB3F1X94d"
+upstream = "https://github.com/INVOKERer/LoFormer"
+sha256 = "5aa66cde8757854bb9dd9dee81fcf9205cf430910a24bbd6c141000dd614d6d2"
+license = "Academic public license (non-commercial)"
+
+[[model]]
+id = "unblur/lakdnet-motion-realj-l"
+op = "unblur"
+arch = "lakdnet-motion-l"
+trained_on = "RealBlur-J"
+file = "unblur/lakdnet_motion_realj_l.pth"
+url = "https://lakdnet.mpi-inf.mpg.de/Weights/Motion/train_on_realj_l/train_on_realj_l.pth"
+upstream = "https://github.com/lingyanruan/LaKDNet"
+sha256 = "519f052f025b734f9be5443c738804f7f36f1108505d8f49b8da212db537620f"
+license = "AGPL-3.0"
+
+# Defocus
+[[model]]
+id = "unblur/restormer-defocus"
+op = "unblur"
+trained_on = "DPDD"
+file = "Restormer-defocus_deblurring.pth"
+url = "https://github.com/swz30/Restormer/releases/download/v1.0/single_image_defocus_deblurring.pth"
+upstream = "https://github.com/swz30/Restormer"
+sha256 = "7dce451f33f8f5e0faf7c4e3996e5dcc1bd425ecd1ada99b0f9750e490fd4c9e"
+license = "Academic, non-commercial (Restormer LICENSE.md)"
+
+[[model]]
+id = "unblur/grl-b-defocus"
+op = "unblur"
+trained_on = "DPDD"
+file = "unblur/grl_b_defocus_dpdd.ckpt"
+url = "https://github.com/ofsoundof/GRL-Image-Restoration/releases/download/v1.0.0/db_defocus_single_pixel_grl_base.ckpt"
+upstream = "https://github.com/ofsoundof/GRL-Image-Restoration"
+sha256 = "25ef38453d6ab4a6bae35d35afd7f50a8f4661895fd6b23de3c3165eaddbbed4"
+license = "MIT"
+
+[[model]]
+id = "unblur/lakdnet-defocus-lfdpdd-s"
+dtype = "fp16"  # dtype_check.py: fp16 matches fp32 to >70 dB
+op = "unblur"
+arch = "lakdnet-defocus-s"
+trained_on = "LFDOF + DPDD"
+file = "unblur/lakdnet_defocus_lfdpdd_s.pth"
+url = "https://lakdnet.mpi-inf.mpg.de/Weights/Defocus/train_on_lfdpdd_s/train_on_lfdpdd_s.pth"
+upstream = "https://github.com/lingyanruan/LaKDNet"
+sha256 = "0f85ce4f4796e5c669b177fead47fa24fe777c3d855e9025f013a950f94ba26a"
+license = "AGPL-3.0"
+
+[[model]]
+id = "unblur/lakdnet-defocus-dpdd-l"
+op = "unblur"
+arch = "lakdnet-defocus-l"
+trained_on = "DPDD"
+file = "unblur/lakdnet_defocus_dpdd_l.pth"
+url = "https://lakdnet.mpi-inf.mpg.de/Weights/Defocus/train_on_dpdd_l/train_on_dpdd_l.pth"
+upstream = "https://github.com/lingyanruan/LaKDNet"
+sha256 = "8f954fe18c4f8f4f03302cf6adaccb586faf5816160c407ca3a1a6aa5f3121f6"
+license = "AGPL-3.0"
+
+[[model]]
+id = "unblur/drbnet-lfdpdd"
+dtype = "fp16"  # dtype_check.py: fp16 matches fp32 to >70 dB
+op = "unblur"
+arch = "drbnet"
+trained_on = "LFDOF + DPDD"
+file = "unblur/drbnet_single_lfdpdd.pth"
+gdrive = "1vGImev9LdagttXE_nN1gZGVstVTRVQHt"
+member = "ckpts/single/single_image_defocus_deblurring.pth"
+upstream = "https://github.com/lingyanruan/DRBNet"
+sha256 = "7e711340686e9ee728829d60e443d2ee28b5a45f6c0415632c22b7f099712382"
+license = "AGPL-3.0"
+
+# Reference: the v1 "sharpen" pick, to show what it does (and doesn't) do on large blur.
+[[model]]
+id = "unblur/sharpen-pick"
+op = "unblur"
+via = "upscale2x/realesrgan-x2plus"
+anchor = 4
+
+# Generative reference: one-step diffusion restorer (SD2.1-base + LoRA). Run by
+# its own test.py (see UNBLUR.md), outputs scored as precomputed. Not a pick candidate.
+[[model]]
+id = "unblur/hypir-sd2"
+op = "unblur"
+trained_on = "Real-ESRGAN-style synthetic degradations (generative prior)"
+file = "unblur/HYPIR_sd2.pth"
+url = "https://huggingface.co/lxq007/HYPIR/resolve/main/HYPIR_sd2.pth"
+upstream = "https://github.com/XPixelGroup/HYPIR"
+sha256 = "d538a2cb925451fab1f75adfe715ac2b1c8bb12fa32a0851ba01be2347b354d6"
+license = "HYPIR Software License (non-commercial); SD2.1 CreativeML Open RAIL++-M"
+precomputed = "hypir_raw/result"
+
+# NAFNet with its Test-time Local Converter (the upstream test configs use it): checks whether
+# the old "color blotches" were a global-pooling/tile-size artifact (UNBLUR.md).
+[[model]]
+id = "unblur/nafnet-gopro-w64+tlc"
+op = "unblur"
+trained_on = "GoPro"
+file = "NAFNet-GoPro-width64.pth"
+url = "https://huggingface.co/nyanko7/nafnet-models/resolve/main/NAFNet-GoPro-width64.pth"
+upstream = "https://github.com/megvii-research/NAFNet"
+sha256 = "329d3ab4077b8d6b7ff61de376e483714667960bf85be027bf4335cda701196f"
+license = "MIT"
+tlc = 256
+
+[[model]]
+id = "unblur/hypir-sd2+anchor"
+op = "unblur"
+trained_on = "Real-ESRGAN-style synthetic degradations (generative prior)"
+file = "unblur/HYPIR_sd2.pth"
+url = "https://huggingface.co/lxq007/HYPIR/resolve/main/HYPIR_sd2.pth"
+upstream = "https://github.com/XPixelGroup/HYPIR"
+sha256 = "d538a2cb925451fab1f75adfe715ac2b1c8bb12fa32a0851ba01be2347b354d6"
+license = "HYPIR Software License (non-commercial); SD2.1 CreativeML Open RAIL++-M"
+precomputed = "hypir_raw/result"
+anchor = 8

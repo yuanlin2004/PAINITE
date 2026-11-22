@@ -1,6 +1,7 @@
 # bench: model bake-off and latency benchmarks
 
-M0 model selection for denoise, sharpen and 2× upscale (docs/DESIGN.md §8, §10).
+M0 model selection for denoise, sharpen and 2× upscale (docs/DESIGN.md §8, §10), and the
+unblur bake-off for real motion blur and defocus ([`UNBLUR.md`](UNBLUR.md)).
 Runs on spark1 (DGX Spark, GB10, aarch64, CUDA 13). The decision and its evidence are in
 [`BAKEOFF.md`](BAKEOFF.md); raw numbers are in `results/`.
 
@@ -19,6 +20,13 @@ Test-set sources (downloaded on the bench machine, never committed; research-use
 - DIV2K validation HR, 100 photos: `https://data.vision.ee.ethz.ch/cvl/DIV2K/DIV2K_valid_HR.zip` → `$PAINITE_BENCH_DIR/data/DIV2K_valid_HR/`
 - SIDD validation crops (Restormer's packaging): `gdown 1Fw6Ey1R-nCHN9WEpxv0MnMqxij-ECQYJ`, unzip to `$PAINITE_BENCH_DIR/data/sidd_val/`
 - PolyU real-world noisy images: `git clone https://github.com/csjunxu/PolyU-Real-World-Noisy-Images-Dataset $PAINITE_BENCH_DIR/data/polyu`
+
+Unblur test-set sources (`$PAINITE_BENCH_DIR/data/deblur/`, see `make_unblur_testset.py`):
+
+- RealBlur-J test (Restormer's packaging): `gdown 1Rb1DhhXmX7IXfilQ-zL9aGjQfAAvQTrW` → `realblurj/`
+- DPDD test: `gdown 1dDWUQ_D93XGtcywoUcZE1HOXCV4EuLyw` → `dpdd/`
+- RealDOF: `https://www.dropbox.com/s/arox1aixvg67fw5/RealDOF.zip?dl=1` → `RealDOF/{source,target}`
+- Köhler et al. blurry images: `http://web.archive.org/web/20240825195707/http://people.kyb.tuebingen.mpg.de/rolfk/BenchmarkECCV2012/BlurryImages.zip` → `kohler/`
 
 ## Run
 

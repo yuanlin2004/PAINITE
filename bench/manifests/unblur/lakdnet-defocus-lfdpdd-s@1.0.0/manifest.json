@@ -1,0 +1,31 @@
+{
+  "id": "unblur/lakdnet-defocus-lfdpdd-s@1.0.0",
+  "operation": "unblur",
+  "mode": "defocus",
+  "version": "1.0.0",
+  "architecture": "LaKDNet (not in spandrel; vendor models/LaKDNet.py from upstream commit 0c6b262cd84bfaa407d79e085010fa90ea7446e6)",
+  "scale": 1,
+  "dtype": "fp16",
+  "weights": {
+    "file": "lakdnet_defocus_lfdpdd_s.pth",
+    "url": "https://lakdnet.mpi-inf.mpg.de/Weights/Defocus/train_on_lfdpdd_s/train_on_lfdpdd_s.pth",
+    "sha256": "0f85ce4f4796e5c669b177fead47fa24fe777c3d855e9025f013a950f94ba26a"
+  },
+  "upstream": "https://github.com/lingyanruan/LaKDNet",
+  "trained_on": "LFDOF + DPDD (real and light-field defocus)",
+  "license": "AGPL-3.0",
+  "config": {
+    "constructor": "LaKDNet(inp_channels=3, out_channels=3, dim=32, num_blocks=[8, 12, 12, 16], mix_kernel_size=[9, 9, 9, 9])",
+    "input": "RGB float in [0,1], output clamped to [0,1]",
+    "pad_multiple": 8,
+    "pad_mode": "reflect"
+  },
+  "tiling": {
+    "tile": 512,
+    "overlap": 64,
+    "batch": 1
+  },
+  "postprocess": [],
+  "strength": "blend: out = input + strength * (model - input)",
+  "selected_by": "bench/UNBLUR.md (unblur bake-off, 2026-11-22)"
+}
