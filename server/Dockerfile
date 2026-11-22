@@ -11,8 +11,11 @@ RUN apt-get update \
 WORKDIR /opt/painite
 COPY pyproject.toml ./
 COPY painite_server ./painite_server
-# The base image already provides torch and numpy; install only what is missing.
-RUN pip install --no-cache-dir .
+# The base image provides torch, torchvision and numpy (pinned by its pip
+# constraints); install only what is missing, and fail the build if CUDA torch
+# was replaced by a PyPI wheel.
+RUN pip install --no-cache-dir '.[models]' \
+ && python -c "import torch, spandrel; assert torch.version.cuda, 'CPU-only torch'; print('torch', torch.__version__, 'cuda', torch.version.cuda)"
 
 ENV PAINITE_DATA_DIR=/var/lib/painite
 VOLUME /var/lib/painite

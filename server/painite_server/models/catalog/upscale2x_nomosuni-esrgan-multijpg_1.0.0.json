@@ -1,0 +1,30 @@
+{
+  "id": "upscale2x/nomosuni-esrgan-multijpg@1.0.0",
+  "adapter": "spandrel",
+  "scale": 2,
+  "description": "2xNomosUni ESRGAN multijpg by Phhofm (bake-off pick)",
+  "license": {
+    "name": "CC-BY-4.0",
+    "url": "https://creativecommons.org/licenses/by/4.0/"
+  },
+  "files": [
+    {
+      "name": "2xNomosUni_esrgan_multijpg.safetensors",
+      "url": "https://huggingface.co/Phips/2xNomosUni_esrgan_multijpg/resolve/main/2xNomosUni_esrgan_multijpg.safetensors",
+      "sha256": "d71c55cc1c70fbb7ac42a25e37bcb99a46672de0bc750924bea81e57c163b5ab"
+    }
+  ],
+  "config": {
+    "weights": "2xNomosUni_esrgan_multijpg.safetensors",
+    "model_scale": 2,
+    "dtype": "fp16",
+    "context": 64,
+    "postprocess": [
+      {
+        "type": "color_anchor",
+        "sigma": 8
+      }
+    ]
+  },
+  "default": true
+}

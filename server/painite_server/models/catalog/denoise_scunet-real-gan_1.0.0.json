@@ -1,0 +1,30 @@
+{
+  "id": "denoise/scunet-real-gan@1.0.0",
+  "adapter": "spandrel",
+  "scale": 1,
+  "description": "SCUNet real-noise GAN variant (bake-off pick, bench/BAKEOFF.md)",
+  "license": {
+    "name": "Apache-2.0",
+    "url": "https://github.com/cszn/SCUNet/blob/main/LICENSE"
+  },
+  "files": [
+    {
+      "name": "scunet_color_real_gan.pth",
+      "url": "https://github.com/cszn/KAIR/releases/download/v1.0/scunet_color_real_gan.pth",
+      "sha256": "892c83f812c59173273b74f4f34a14ecaf57a2fdb68df056664589beb55c966e"
+    }
+  ],
+  "config": {
+    "weights": "scunet_color_real_gan.pth",
+    "model_scale": 1,
+    "dtype": "fp16",
+    "context": 64,
+    "postprocess": [
+      {
+        "type": "color_anchor",
+        "sigma": 8
+      }
+    ]
+  },
+  "default": true
+}

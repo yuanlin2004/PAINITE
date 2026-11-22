@@ -28,7 +28,7 @@ class Settings:
     disk_cap_bytes: int = field(default_factory=lambda: _env_int("PAINITE_DISK_CAP_BYTES", 200 * 1024**3))
     sweep_interval_s: int = field(default_factory=lambda: _env_int("PAINITE_SWEEP_INTERVAL_S", 60))
     tile_size: int = field(default_factory=lambda: _env_int("PAINITE_TILE_SIZE", 512))
-    tile_overlap: int = field(default_factory=lambda: _env_int("PAINITE_TILE_OVERLAP", 32))
+    tile_overlap: int = field(default_factory=lambda: _env_int("PAINITE_TILE_OVERLAP", 64))
 
     @property
     def sources_dir(self) -> Path:

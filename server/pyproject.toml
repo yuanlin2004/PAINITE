@@ -16,6 +16,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Real models. torch and torchvision come from the NGC base image (or your own CUDA build).
+models = ["spandrel==0.4.2"]
 test = ["pytest>=8", "httpx>=0.27", "pillow>=10"]
 
 [project.scripts]
