@@ -120,6 +120,29 @@ def test_tiff_to_jpeg_conversion(api, images):
     assert decode(res.content).format == "uchar"
 
 
+def test_grayscale_input_is_enhanced_as_rgb(api, tmp_path):
+    """Black-and-white scans (one band, with a gray ICC profile) are accepted."""
+    import numpy as np
+    import pyvips
+    from PIL import ImageCms
+
+    gray = np.random.default_rng(1).integers(0, 256, (90, 120), dtype=np.uint8)
+    img = pyvips.Image.new_from_array(gray).copy(interpretation="b-w")
+    img.set_type(pyvips.GValue.blob_type, "icc-profile-data",
+                 ImageCms.ImageCmsProfile(ImageCms.createProfile("LAB")).tobytes())  # any non-RGB profile
+    path = tmp_path / "bw.jpg"
+    img.jpegsave(str(path), Q=95)
+    data = path.read_bytes()
+    r = api.upload(data)
+    assert r.status_code in (200, 201), r.json()
+    assert r.json()["has_icc"] is False
+    job = api.wait(api.create(full(data, "upscale2x"), key="bw-up").json()["id"])
+    assert job["state"] == "completed", job
+    out = decode(api.result(job["id"]).content)
+    assert (out.bands, out.width, out.height) == (3, 240, 180)
+    assert "icc-profile-data" not in out.get_fields()
+
+
 def test_upscale_doubles_dimensions(api, images):
     data = images["tiff8_rot8"]
     api.upload(data)

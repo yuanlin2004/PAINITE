@@ -1,0 +1,57 @@
+title: Help
+description: Troubleshooting PAINITE, limits, privacy, and the licenses of PAINITE and its AI models.
+---
+<div class="prose">
+<p class="eyebrow">Help</p>
+<h1>Help and licenses</h1>
+
+<h2 id="troubleshooting">Troubleshooting</h2>
+<h3>The app or <code>painite status</code> can't reach the server</h3>
+<ul>
+  <li>Check that the server is running: <code>systemctl status painite-server</code> on the server. Its log is in <code>journalctl -u painite-server</code>.</li>
+  <li>Use the same name or IP address that the certificate covers (the installer prints them). To add a name, run <code>sudo ./install.sh --hostname <em>name</em></code> again. Clients stay trusted.</li>
+  <li>On a Mac, allow PAINITE in <strong>System Settings › Privacy &amp; Security › Local Network</strong>.</li>
+  <li>The server uses port 8443. Make sure a firewall doesn't block it.</li>
+</ul>
+<h3>“Certificate not trusted” or a fingerprint mismatch</h3>
+<p>Get the fingerprint on the server with <code>sudo painite-server admin fingerprint</code> and trust it again: <code>painite trust --fingerprint SHA256:…</code>, or <strong>Trust</strong> in the Mac app's Settings. If the server was reinstalled with <code>--new-ca</code>, every computer has to trust it again.</p>
+<h3>“Unauthorized”</h3>
+<p>The token is wrong or was revoked. Create a new one on the server with <code>sudo painite-server token create --name <em>computer</em></code> and enter it in Settings or with <code>painite config set token</code>.</p>
+<h3>A step says it uses a placeholder, or Unblur fails</h3>
+<p>The model isn't installed on the server. Run <code>sudo painite-server models list</code> to check, then <code>sudo painite-server models pull --all --accept-license</code> and <code>sudo systemctl restart painite-server</code>. Pulling downloads only what is missing.</p>
+<h3>macOS says PAINITE can't be opened</h3>
+<p>This release isn't notarized yet. Open <strong>System Settings › Privacy &amp; Security</strong> and click <strong>Open Anyway</strong>, or run <code>xattr -dr com.apple.quarantine /Applications/PAINITE.app</code>.</p>
+<h3>Something else</h3>
+<p>Please <a href="https://github.com/yuanlin2004/PAINITE/issues">open an issue</a> with what you did, what happened, and the output of <code>painite status</code>.</p>
+
+<h2 id="limits">Limits</h2>
+<ul>
+  <li>Input: JPEG and TIFF (8 or 16-bit RGB), up to 48 megapixels and 512 MB.</li>
+  <li>Output: up to 192 megapixels.</li>
+  <li>Up to four steps per job, with one Upscale 2×.</li>
+  <li>The server operator can change these limits (see the <a href="https://github.com/yuanlin2004/PAINITE/blob/main/server/README.md#settings">server settings</a>).</li>
+</ul>
+
+<h2 id="privacy">Privacy</h2>
+<p>Your photos go only to your own PAINITE server, over an encrypted connection. The server deletes uploaded photos 15 minutes after their last use, and results after 24 hours. PAINITE sends nothing to anyone else. The only internet access is the server's one-time download of the models.</p>
+
+<h2 id="licenses">Licenses</h2>
+<h3>PAINITE</h3>
+<p>PAINITE is © 2026 Yuan Lin and licensed under the <a href="https://github.com/yuanlin2004/PAINITE/blob/main/LICENSE">Apache License 2.0</a>. You may use, change and share it, including commercially. If you redistribute PAINITE or a work based on it, you must include its <a href="https://github.com/yuanlin2004/PAINITE/blob/main/NOTICE">NOTICE</a> file, which credits Yuan Lin.</p>
+<h3>AI models</h3>
+<p>PAINITE ships no model weights. The server downloads each model from its authors, or from <a href="https://github.com/yuanlin2004/PAINITE/releases/tag/models-v1">PAINITE's unchanged copy</a>, after you accept the model's license. <strong>These licenses are separate from PAINITE's, and two restrict how you may use the results.</strong></p>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Enhancement</th><th>Model</th><th>License</th></tr></thead>
+  <tbody>
+    <tr><td>Denoise</td><td><a href="https://github.com/cszn/SCUNet">SCUNet</a> (Zhang et al.)</td><td>Apache-2.0</td></tr>
+    <tr><td>Sharpen</td><td><a href="https://github.com/xinntao/Real-ESRGAN">Real-ESRGAN</a> (Wang et al.)</td><td>BSD-3-Clause</td></tr>
+    <tr><td>Upscale 2×</td><td><a href="https://huggingface.co/Phips/2xNomosUni_esrgan_multijpg">2xNomosUni ESRGAN multijpg</a> (Philip Hofmann)</td><td>CC-BY-4.0</td></tr>
+    <tr><td>Face</td><td><a href="https://github.com/yangxy/GPEN">GPEN-BFR-1024</a> (Yang et al.), <a href="https://github.com/xinntao/facexlib">RetinaFace</a> detection</td><td>Apache-2.0 (per the <a href="https://modelscope.cn/models/iic/cv_gpen_image-portrait-enhancement-hires">ModelScope card</a>); MIT</td></tr>
+    <tr><td>Unblur: Motion</td><td><a href="https://github.com/pp00704831/Stripformer-ECCV-2022-">Stripformer</a> (Tsai et al.)</td><td><strong>Non-commercial use only</strong></td></tr>
+    <tr><td>Unblur: Focus</td><td><a href="https://github.com/lingyanruan/LaKDNet">LaKDNet</a> (Ruan et al.)</td><td>AGPL-3.0</td></tr>
+  </tbody>
+</table>
+</div>
+<p>If you use PAINITE commercially, leave out the motion unblur model (don't pull <code>unblur_motion/stripformer-realblurj</code>) and check the other licenses yourself. This page is not legal advice.</p>
+</div>

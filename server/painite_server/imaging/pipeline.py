@@ -52,7 +52,16 @@ class SourceInfo:
 
 def _open(path: Path) -> pyvips.Image:
     # access=sequential is not used: tiles read random regions.
-    return pyvips.Image.new_from_file(str(path))
+    img = pyvips.Image.new_from_file(str(path))
+    if img.bands == 1 and img.interpretation in ("b-w", "grey16") and img.format in ("uchar", "ushort"):
+        # Grayscale (old black-and-white scans): the models want RGB, so copy the
+        # one band to three. A gray ICC profile can't describe RGB pixels, so it
+        # is dropped and the result is untagged (read as sRGB).
+        img = img.bandjoin([img, img]).copy(interpretation="rgb16" if img.format == "ushort" else "srgb")
+        if "icc-profile-data" in img.get_fields():
+            img = img.copy()
+            img.remove("icc-profile-data")
+    return img
 
 
 def probe(path: Path, max_pixels: int) -> SourceInfo:

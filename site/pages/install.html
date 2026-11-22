@@ -1,0 +1,83 @@
+title: Install
+description: Install the PAINITE server on an NVIDIA DGX Spark, then the Mac app or the painite command line tool.
+---
+<div class="prose">
+<p class="eyebrow">Installation</p>
+<h1>Set up PAINITE</h1>
+<p class="lede">PAINITE has two parts: a <strong>server</strong> that runs the AI models on an NVIDIA GPU, and the <strong>apps</strong> you use on your computers. Set up the server once, then connect each Mac or Linux computer to it.</p>
+
+<div class="toc">
+  <strong>On this page</strong>
+  <ul>
+    <li><a href="#server">1. Install the server</a></li>
+    <li><a href="#token">2. Create a token for each computer</a></li>
+    <li><a href="#mac">3. Install the Mac app</a></li>
+    <li><a href="#cli">4. Install the command line tool</a></li>
+    <li><a href="#upgrade">Upgrading</a></li>
+  </ul>
+</div>
+
+<h2 id="server">1. Install the server</h2>
+<p><strong>You need:</strong> an NVIDIA DGX Spark (or another Linux machine with an NVIDIA GPU) with Docker and the NVIDIA Container Toolkit, which DGX OS includes. You also need about 40 GB of free disk space and an internet connection for the first install. PAINITE is tested on the DGX Spark.</p>
+<ol class="steps">
+  <li>
+    <p>Download and unpack the server on the DGX Spark:</p>
+<pre><code>curl -LO https://github.com/yuanlin2004/PAINITE/releases/download/v1.0.0/painite-server_1.0.0.tar.gz
+tar xzf painite-server_1.0.0.tar.gz
+cd painite-server_1.0.0</code></pre>
+  </li>
+  <li>
+    <p>Run the installer:</p>
+<pre><code>sudo ./install.sh</code></pre>
+    <p>It builds the server's Docker image, creates a private certificate so your computers can connect securely, downloads the AI models and starts the <code>painite-server</code> service. The first run takes a while, because it downloads NVIDIA's PyTorch image (about 20 GB) and the models (about 1 GB).</p>
+    <p>Before it downloads the models, the installer lists each model's license and asks you to accept them. <strong>Some models allow only non-commercial use</strong>; see <a href="help.html#licenses">model licenses</a>.</p>
+  </li>
+  <li>
+    <p>When it finishes, the installer prints the server's address and its <strong>CA fingerprint</strong>, a line starting with <code>SHA256:</code>. Keep both for the next steps. To see the fingerprint again later:</p>
+<pre><code>sudo painite-server admin fingerprint</code></pre>
+  </li>
+</ol>
+<div class="note">
+  <p>By default the certificate covers the machine's name, <code><em>name</em>.local</code>, and its IP addresses. If your computers reach it by another name, add it: <code>sudo ./install.sh --hostname spark.example.lan</code>. Run <code>./install.sh --help</code> for all options.</p>
+</div>
+
+<h2 id="token">2. Create a token for each computer</h2>
+<p>Every computer that uses the server needs its own access token. On the server, run:</p>
+<pre><code>sudo painite-server token create --name my-macbook</code></pre>
+<p>It prints a token starting with <code>pnt_</code> once. Copy it to the computer you are setting up. To see or revoke tokens later, use <code>painite-server token list</code> and <code>painite-server token revoke --name my-macbook</code>.</p>
+
+<h2 id="mac">3. Install the Mac app</h2>
+<p><strong>You need:</strong> a Mac with Apple silicon and macOS 14 or later.</p>
+<ol class="steps">
+  <li><p>Download <a href="https://github.com/yuanlin2004/PAINITE/releases/download/v1.0.0/PAINITE_1.0.0_macos_arm64.zip">PAINITE_1.0.0_macos_arm64.zip</a>, open it, and drag <strong>PAINITE</strong> to your Applications folder.</p></li>
+  <li>
+    <p>Open PAINITE. This release isn't notarized by Apple yet, so macOS stops it the first time. Click <strong>Done</strong>, then open <strong>System Settings › Privacy &amp; Security</strong>, scroll down, and click <strong>Open Anyway</strong> next to the PAINITE message. You only need to do this once.</p>
+    <p>Or, in Terminal: <code>xattr -dr com.apple.quarantine /Applications/PAINITE.app</code></p>
+  </li>
+  <li><p>In the welcome window, click <strong>Connect to Server…</strong> (or choose <strong>PAINITE › Settings…</strong>). Enter the server address, for example <code>https://spark:8443</code>, and paste the CA fingerprint. Click <strong>Trust</strong>, then paste your token.</p></li>
+  <li><p>Allow <strong>Local Network</strong> access when macOS asks. PAINITE needs it to reach your server.</p></li>
+</ol>
+<p>Next: <a href="mac.html">using the Mac app</a>.</p>
+
+<h2 id="cli">4. Install the command line tool</h2>
+<h3>Ubuntu (x86-64 or ARM64)</h3>
+<pre><code>curl -LO https://github.com/yuanlin2004/PAINITE/releases/download/v1.0.0/painite_1.0.0_amd64.deb   # or _arm64.deb
+sudo apt install ./painite_1.0.0_amd64.deb</code></pre>
+<h3>macOS (Apple silicon) and other Linux</h3>
+<pre><code>curl -LO https://github.com/yuanlin2004/PAINITE/releases/download/v1.0.0/painite_1.0.0_darwin_arm64.tar.gz
+tar xzf painite_1.0.0_darwin_arm64.tar.gz
+sudo install painite /usr/local/bin/</code></pre>
+<p>For Linux use <code>painite_1.0.0_linux_amd64.tar.gz</code> or <code>painite_1.0.0_linux_arm64.tar.gz</code>. Downloading with <code>curl</code> as shown avoids the macOS quarantine prompt.</p>
+<h3>Connect it to the server</h3>
+<pre><code>painite config set endpoint https://spark:8443
+painite trust --fingerprint SHA256:…        # the fingerprint from step 1
+painite config set token pnt_…              # the token from step 2
+painite status</code></pre>
+<p><code>painite status</code> should report the server as <strong>ok</strong> and list its models. The Mac app and the command line tool share these settings, so setting up one sets up both on the same Mac.</p>
+<p>Next: <a href="cli.html">using the command line</a>.</p>
+
+<h2 id="upgrade">Upgrading</h2>
+<p><strong>Server:</strong> unpack the new release and run <code>sudo ./install.sh</code> again. Your certificate, tokens and models are kept. <strong>Mac app:</strong> replace the app in Applications. <strong>Command line:</strong> install the new package the same way.</p>
+<h3>Checksums</h3>
+<p>Each download has a SHA-256 checksum on the <a href="https://github.com/yuanlin2004/PAINITE/releases/tag/v1.0.0">release page</a>. To check the command line packages: <code>sha256sum -c --ignore-missing SHA256SUMS</code>.</p>
+</div>

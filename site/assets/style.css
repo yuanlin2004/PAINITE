@@ -67,6 +67,7 @@ kbd {
 }
 .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text); font-weight: 700; letter-spacing: 0.18em; }
 .brand img { width: 30px; height: 30px; }
+@media (max-width: 640px) { .site-header { position: static; } }
 .site-header nav { display: flex; gap: 4px 16px; flex-wrap: wrap; margin-left: auto; }
 .site-header nav a { color: var(--muted); text-decoration: none; font-size: 15px; padding: 4px 0; }
 .site-header nav a:hover, .site-header nav a[aria-current="page"] { color: var(--text); }
@@ -138,7 +139,7 @@ ol.steps > li::before {
 .compare .divider::after {
   content: "‹ ›"; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
   background: #fff; color: #222; border-radius: 999px; padding: 2px 8px; font-weight: 700; font-size: 14px;
-  box-shadow: 0 1px 6px rgba(0,0,0,.4);
+  box-shadow: 0 1px 6px rgba(0,0,0,.4); white-space: nowrap; line-height: 1.4;
 }
 .compare .tag {
   position: absolute; top: 10px; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600;

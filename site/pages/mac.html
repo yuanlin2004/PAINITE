@@ -1,0 +1,96 @@
+title: Mac app
+description: How to enhance photos with the PAINITE Mac app: steps, presets, the preview area, comparing, exporting, and Lightroom.
+---
+<div class="prose">
+<p class="eyebrow">Mac app</p>
+<h1>Using the Mac app</h1>
+<p class="lede">Open a photo, choose what to fix, check a live before/after preview of the part that matters, then export the full photo. The original is never changed.</p>
+
+<div class="toc">
+  <strong>On this page</strong>
+  <ul>
+    <li><a href="#open">Open a photo</a></li>
+    <li><a href="#steps">Choose the steps</a></li>
+    <li><a href="#preview">The preview area</a></li>
+    <li><a href="#compare">Compare before and after</a></li>
+    <li><a href="#export">Export</a></li>
+    <li><a href="#lightroom">Use it from Lightroom</a></li>
+    <li><a href="#keys">Keyboard shortcuts</a></li>
+  </ul>
+</div>
+
+<p>First, connect the app to your server. See <a href="install.html#mac">Install the Mac app</a>.</p>
+
+<h2 id="open">Open a photo</h2>
+<p>Drag a photo onto the welcome window or the Dock icon, choose <strong>File › Open…</strong> (<kbd>⌘</kbd><kbd>O</kbd>), or pick one of your recent photos. PAINITE works with <strong>JPEG</strong> and <strong>TIFF</strong> files, including 16-bit TIFFs from Lightroom, up to 48 megapixels.</p>
+<p>The photo is sent to your server as soon as it opens, so the first preview is quick. A photo the server already has is not sent again.</p>
+
+<h2 id="steps">Choose the steps</h2>
+<p>The inspector on the right holds the <strong>steps</strong> that run on your photo, top to bottom, in one pass. You can have up to four.</p>
+<ul>
+  <li><strong>Presets:</strong> start from <em>Clean Up</em>, <em>High ISO</em>, <em>Portrait</em>, <em>Rescue Blur</em> or <em>Print 2×</em> in the preset menu. Change anything and it becomes <em>Custom</em>.</li>
+  <li><strong>Add a step</strong> with <strong>+ Add Step</strong>: Denoise, Sharpen, Unblur, Face or Upscale 2×. Upscale can be used once.</li>
+  <li><strong>Strength:</strong> drag a step's slider. The preview updates when you let go.</li>
+  <li><strong>Unblur</strong> has a <strong>Motion / Focus</strong> switch. Pick Motion when the photo is smeared in one direction (camera shake, a moving subject), and Focus when it is evenly soft (missed focus). See <a href="enhancements.html#unblur">which unblur to use</a>.</li>
+  <li><strong>Reorder</strong> by dragging a step's card. Use the switch on a card to turn a step off without removing it, and the <strong>…</strong> menu to move, duplicate, solo or remove it.</li>
+  <li><strong>Faces:</strong> with a Face step, <strong>Show faces</strong> outlines each face found: green for faces it restored, dashed orange for faces too small or too large to restore.</li>
+</ul>
+<p>A new photo starts with the steps you used last.</p>
+<p>Not sure what to use? The <a href="enhancements.html">Enhancements</a> page shows what each step does, with examples.</p>
+
+<h2 id="preview">The preview area</h2>
+<p>The server renders a preview of one <strong>preview area</strong>, shown with corner brackets and its size. It starts in the middle of the photo, at most 2048 px square (1024 px with Upscale). Previewing only this area keeps it fast, even on a 40-megapixel photo.</p>
+<ul>
+  <li>Press <kbd>⌘</kbd><kbd>E</kbd> (<strong>Select Area</strong>), then drag to draw a new area, drag inside it to move it, or click to center it there. <kbd>Shift</kbd>-drag works at any time. <kbd>Esc</kbd> cancels.</li>
+  <li><kbd>⇧</kbd><kbd>⌘</kbd><kbd>E</kbd> (<strong>Preview Area in View</strong>) uses what is on screen.</li>
+  <li>Zooming and panning never move the area.</li>
+  <li>While a new preview renders, the area shows moving orange dashes and the old result is dimmed. <kbd>⌘</kbd><kbd>R</kbd> renders it again.</li>
+</ul>
+<div class="note"><p>The preview is exactly what you will export. The server uses the same model and the same tiles for both, so there are no surprises.</p></div>
+
+<h2 id="compare">Compare before and after</h2>
+<ul>
+  <li><strong>Split</strong> (<kbd>⌥</kbd><kbd>⌘</kbd><kbd>1</kbd>) shows one photo with a divider you drag. Before is on the left, after on the right.</li>
+  <li><strong>Side by Side</strong> (<kbd>⌥</kbd><kbd>⌘</kbd><kbd>2</kbd>) shows two panes, always at the same zoom and position.</li>
+  <li>Hold <kbd>\</kbd> to see the original.</li>
+  <li>Zoom with <kbd>⌘</kbd><kbd>+</kbd> / <kbd>⌘</kbd><kbd>−</kbd>, <kbd>⌘</kbd><kbd>0</kbd> to fit, <kbd>⌘</kbd><kbd>1</kbd> for 100% (one photo pixel per screen pixel). Double-click inside the preview area to zoom it to 100%.</li>
+</ul>
+<p>The <strong>After</strong> tag on the photo shows the settings the preview was made with, for example “Denoise 60 · Sharpen 25”.</p>
+
+<h2 id="export">Export</h2>
+<p>Click <strong>Export…</strong> in the toolbar (<kbd>⌘</kbd><kbd>S</kbd>). Choose a name, a folder, and JPEG or TIFF. The server enhances the whole photo with the same steps and models as the preview, and the app shows progress. You can cancel at any time.</p>
+<ul>
+  <li>The original is never overwritten. A failed or canceled export never leaves a half-written file.</li>
+  <li>If you changed the steps since the last preview, PAINITE asks whether to update the preview first.</li>
+  <li>The export keeps the photo's color profile and its EXIF, XMP and IPTC metadata.</li>
+</ul>
+
+<h2 id="lightroom">Use it from Lightroom</h2>
+<p>PAINITE works as an external editor for <strong>Lightroom desktop</strong>.</p>
+<ol class="steps">
+  <li><p>Once: in Lightroom, choose <strong>Photo › Edit in › Browse…</strong> and select <strong>PAINITE</strong> in Applications.</p></li>
+  <li><p>Select a photo and choose <strong>Edit in › PAINITE</strong>. Lightroom hands PAINITE a 16-bit TIFF, which opens with your last steps.</p></li>
+  <li><p>Adjust the steps and preview, then click <strong>Save to Lightroom</strong> (<kbd>⌘</kbd><kbd>S</kbd>). To keep a separate file instead, use <strong>File › Export a Copy…</strong> (<kbd>⇧</kbd><kbd>⌘</kbd><kbd>S</kbd>).</p></li>
+  <li><p>Back in Lightroom, click <strong>Finish</strong>. The enhanced copy appears next to the original.</p></li>
+</ol>
+<p>For RAW photos, Lightroom may offer no Finish button. Use <strong>Export a Copy…</strong> instead (it suggests <code>~/Pictures/<em>name</em>-painite.tif</code>), then bring the file back with Lightroom's <strong>Select…</strong>.</p>
+
+<h2 id="keys">Keyboard shortcuts</h2>
+<div class="table-wrap">
+<table>
+  <tbody>
+    <tr><td><kbd>⌘</kbd><kbd>O</kbd></td><td>Open a photo</td></tr>
+    <tr><td><kbd>⌘</kbd><kbd>S</kbd></td><td>Export… (Save to Lightroom for Lightroom photos)</td></tr>
+    <tr><td><kbd>⇧</kbd><kbd>⌘</kbd><kbd>S</kbd></td><td>Export a Copy… (Lightroom photos)</td></tr>
+    <tr><td><kbd>⌘</kbd><kbd>E</kbd> / <kbd>⇧</kbd><kbd>⌘</kbd><kbd>E</kbd></td><td>Select the preview area / use the area in view</td></tr>
+    <tr><td><kbd>⌘</kbd><kbd>R</kbd></td><td>Render the preview again</td></tr>
+    <tr><td><kbd>⌥</kbd><kbd>⌘</kbd><kbd>1</kbd> / <kbd>⌥</kbd><kbd>⌘</kbd><kbd>2</kbd></td><td>Split / Side by Side</td></tr>
+    <tr><td><kbd>\</kbd> (hold)</td><td>Show the original</td></tr>
+    <tr><td><kbd>⌘</kbd><kbd>+</kbd> <kbd>⌘</kbd><kbd>−</kbd> <kbd>⌘</kbd><kbd>0</kbd> <kbd>⌘</kbd><kbd>1</kbd></td><td>Zoom in, zoom out, fit, 100%</td></tr>
+    <tr><td><kbd>⌥</kbd><kbd>⌘</kbd><kbd>I</kbd></td><td>Show or hide the inspector</td></tr>
+    <tr><td><kbd>⌘</kbd><kbd>,</kbd></td><td>Settings (server address, token)</td></tr>
+    <tr><td><kbd>⌘</kbd><kbd>?</kbd></td><td>Open this user guide</td></tr>
+  </tbody>
+</table>
+</div>
+</div>
