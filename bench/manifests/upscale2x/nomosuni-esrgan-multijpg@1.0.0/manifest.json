@@ -1,0 +1,30 @@
+{
+  "id": "upscale2x/nomosuni-esrgan-multijpg@1.0.0",
+  "operation": "upscale2x",
+  "version": "1.0.0",
+  "architecture": "ESRGAN (RRDBNet)",
+  "scale": 2,
+  "dtype": "fp16",
+  "weights": {
+    "file": "2xNomosUni_esrgan_multijpg.safetensors",
+    "url": "https://huggingface.co/Phips/2xNomosUni_esrgan_multijpg/resolve/main/2xNomosUni_esrgan_multijpg.safetensors",
+    "sha256": "d71c55cc1c70fbb7ac42a25e37bcb99a46672de0bc750924bea81e57c163b5ab"
+  },
+  "upstream": "https://github.com/Phhofm/models",
+  "license": "CC-BY-4.0",
+  "tiling": {
+    "tile": 512,
+    "overlap": 64,
+    "batch": 1
+  },
+  "postprocess": [
+    {
+      "type": "color_anchor",
+      "sigma": 8
+    }
+  ],
+  "alternates": [
+    "upscale2x/swinir-m-real-gan (slightly better on noisy inputs, ~6x slower)"
+  ],
+  "selected_by": "bench/BAKEOFF.md (M0 bake-off, 2026-11-21)"
+}
