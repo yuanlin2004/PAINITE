@@ -1,0 +1,47 @@
+{
+  "id": "face/gpen-bfr-1024@1.0.0",
+  "adapter": "face",
+  "scale": 1,
+  "description": "GPEN-BFR-1024 face restoration with RetinaFace-R50 detection (bake-off pick, bench/FACE_BAKEOFF.md). Needs the GPEN arch in the adapter (not loadable by spandrel).",
+  "license": {
+    "name": "Apache-2.0 (ModelScope model card); no license file in yangxy/GPEN",
+    "url": "https://modelscope.cn/models/iic/cv_gpen_image-portrait-enhancement-hires"
+  },
+  "files": [
+    {
+      "name": "GPEN-BFR-1024.pth",
+      "url": "https://modelscope.cn/api/v1/models/iic/cv_gpen_image-portrait-enhancement-hires/repo?Revision=master&FilePath=pytorch_model.pt",
+      "sha256": "eeb799bdfcb86ce347f89cd7f286a901517d7e24d3123399d11a79f51329a8f9",
+      "bytes": 284914645
+    },
+    {
+      "name": "detection_Resnet50_Final.pth",
+      "url": "https://github.com/xinntao/facexlib/releases/download/v0.1.0/detection_Resnet50_Final.pth",
+      "sha256": "6d1de9c2944f2ccddca5f5e010ea5ae64a39845a86311af6fdf30841b0a5a16d",
+      "bytes": 109497761
+    }
+  ],
+  "config": {
+    "detector": "detection_Resnet50_Final.pth",
+    "restorer": "GPEN-BFR-1024.pth",
+    "restorer_args": {
+      "arch": "gpen",
+      "size": 1024,
+      "style_dim": 512,
+      "n_mlp": 8,
+      "channel_multiplier": 2,
+      "narrow": 1
+    },
+    "dtype": "bf16",
+    "face_size": 1024,
+    "detect_long_side": 2048,
+    "detect_threshold": 0.9,
+    "min_face": 128,
+    "max_face": 1024,
+    "mask_inset": 0.05,
+    "mask_feather": 0.12,
+    "color_anchor_sigma": 16,
+    "default_strength": 0.5
+  },
+  "default": true
+}
