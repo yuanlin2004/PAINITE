@@ -102,7 +102,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let view = WelcomeView(open: { [weak self] in self?.openDocument(nil) },
                                    openURLs: { [weak self] urls in self?.openDocuments(urls) })
             let w = NSWindow(contentViewController: NSHostingController(rootView: view))
-            w.title = "PAINITE"
+            w.title = "Welcome to PAINITE"
             w.styleMask = [.titled, .closable, .miniaturizable]
             w.isReleasedWhenClosed = false
             w.center()
@@ -175,6 +175,15 @@ enum MainMenu {
         view.addItem(withTitle: "Select Preview Area", action: #selector(DocumentWindowController.selectPreviewArea(_:)), keyEquivalent: "e")
         let visible = view.addItem(withTitle: "Preview Area in View", action: #selector(DocumentWindowController.previewAreaInView(_:)), keyEquivalent: "e")
         visible.keyEquivalentModifierMask = [.command, .shift]
+        view.addItem(.separator())
+        let split = view.addItem(withTitle: "Split", action: #selector(DocumentWindowController.showSplit(_:)), keyEquivalent: "1")
+        split.keyEquivalentModifierMask = [.command, .option]
+        let sbs = view.addItem(withTitle: "Side by Side", action: #selector(DocumentWindowController.showSideBySide(_:)), keyEquivalent: "2")
+        sbs.keyEquivalentModifierMask = [.command, .option]
+        view.addItem(withTitle: "Regenerate Preview", action: #selector(DocumentWindowController.regeneratePreview(_:)), keyEquivalent: "r")
+        view.addItem(.separator())
+        let inspector = view.addItem(withTitle: "Hide Inspector", action: #selector(DocumentWindowController.toggleInspector(_:)), keyEquivalent: "i")
+        inspector.keyEquivalentModifierMask = [.command, .option]
         add(view, to: main)
 
         let window = NSMenu(title: "Window")

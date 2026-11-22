@@ -3,13 +3,19 @@ import PainiteKit
 import QuartzCore
 import SwiftUI
 
-/// Before and after, side by side, always at the same zoom and position.
+/// Before and after, always at the same zoom and position.
 ///
-/// Both panes show the same displayed-source-pixel rectangle. The after pane
-/// shows the original dimmed, with the server's preview on top of the region
-/// it covers. Upscaled previews are drawn into the same source region, so both
-/// sides keep the same framing (PRD). Layers are color matched by Core Animation.
+/// Two modes: Split (one image with a draggable divider: Before on the left,
+/// After on the right) and Side by Side (two panes). Both panes show the same
+/// displayed-source-pixel rectangle. The after pane shows the original under a
+/// scrim, with the server's preview on top of the region it covers. Upscaled
+/// previews are drawn into the same source region, so both sides keep the same
+/// framing (PRD). Layers are color matched by Core Animation.
 final class CompareView: NSView {
+    enum Mode: String, CaseIterable {
+        case split, sideBySide
+    }
+
     /// Visible rectangle in displayed source pixels, and zoom in percent (100 = one image pixel per screen pixel).
     var onViewportChange: ((CGRect, Double) -> Void)?
     /// A new preview area picked by dragging, in displayed source pixels.
@@ -26,30 +32,47 @@ final class CompareView: NSView {
         }
     }
 
+    var mode: Mode = .split {
+        didSet {
+            guard oldValue != mode else { return }
+            needsLayout = true
+            window?.invalidateCursorRects(for: self)
+        }
+    }
+
     private var original: CGImage?
     private var previewImage: CGImage?
     private var previewRegion: CGRect = .zero
     private var imageSize: CGSize = .zero
     private var box: CGRect?
+    private var boxLabel = ""
     /// The picked area (before tile snapping), which a drag inside the box moves.
     private var selection: CGRect?
     private var drag: Drag?
+    /// Split divider position as a fraction of the view's width.
+    private var dividerFraction: CGFloat = 0.5
+    /// True while `\` is held: show Before everywhere.
+    private var peekingBefore = false {
+        didSet { if oldValue != peekingBefore { applyTransform(notify: false) } }
+    }
 
     private enum Drag {
         case pan
+        case divider
         /// Drawing a new area from this image point.
         case draw(from: CGPoint, to: CGPoint)
         /// Moving the selection by the distance from this image point.
         case move(from: CGPoint, to: CGPoint, original: CGRect)
     }
-    /// With no steps the enhanced side is just the original, shown undimmed.
+
+    /// With no steps the enhanced side is just the original, shown without the scrim.
     var enhancedIsOriginal = false {
         didSet { if oldValue != enhancedIsOriginal { applyTransform(notify: false) } }
     }
-    private var boxState: BoxState = .pending
+    private var boxState: BoxState?
 
     enum BoxState {
-        /// Waiting to send, or the server is rendering it: the outline pulses.
+        /// Settings changed and the preview is waiting to be sent or rendering: marching orange dashes.
         case pending, rendering
         /// The preview inside the box is current.
         case ready
@@ -64,32 +87,41 @@ final class CompareView: NSView {
 
     private let leftPane = CALayer()
     private let rightPane = CALayer()
-    private let divider = CALayer()
+    /// In Split mode, clips the after pane to the right of the divider.
+    private let rightMask = CALayer()
+    private let gutter = CALayer()
+    private let dividerLine = CALayer()
+    private let dividerHandle = CALayer()
     private let leftImage = CALayer()
     private let rightBase = CALayer()
     private let rightPreview = CALayer()
-    private let outline = CALayer()
-    /// The same box on the original side.
-    private let outlineLeft = CALayer()
-    /// The area being drawn or moved, in both panes.
+    /// Box, label and drag band, above the panes: one per pane (only the first in Split mode).
+    private let overlays = [CALayer(), CALayer()]
+    private let outlines = [CAShapeLayer(), CAShapeLayer()]
+    private let brackets = [CAShapeLayer(), CAShapeLayer()]
+    private let labels = [CATextLayer(), CATextLayer()]
     private let bands = [CALayer(), CALayer()]
-    /// Face outlines (from a face step), in both panes.
+    /// Face outlines (from a face step), on the after side only.
     private var faces: [FaceInfo] = []
     private var faceLayers: [CAShapeLayer] = []
+
+    /// Largest zoom, as image pixels per screen pixel (800%).
+    static let maxZoom: CGFloat = 8
+
+    static let accent = NSColor(srgbRed: 0xF5 / 255, green: 0x8A / 255, blue: 0x3D / 255, alpha: 1)
 
     override init(frame: NSRect) {
         super.init(frame: frame)
         let root = CALayer()
         root.isGeometryFlipped = true
-        root.backgroundColor = NSColor(white: 0.12, alpha: 1).cgColor
         layer = root
         wantsLayer = true
         for pane in [leftPane, rightPane] {
             pane.masksToBounds = true
             root.addSublayer(pane)
         }
-        divider.backgroundColor = NSColor(white: 0.35, alpha: 1).cgColor
-        root.addSublayer(divider)
+        rightMask.backgroundColor = NSColor.black.cgColor
+        root.addSublayer(gutter)
         for l in [leftImage, rightBase, rightPreview] {
             l.anchorPoint = .zero
             l.minificationFilter = .trilinear
@@ -98,20 +130,62 @@ final class CompareView: NSView {
         leftPane.addSublayer(leftImage)
         rightPane.addSublayer(rightBase)
         rightPane.addSublayer(rightPreview)
-        outline.borderColor = NSColor(white: 1, alpha: 0.8).cgColor
-        outline.borderWidth = 1.5
-        outline.isHidden = true
-        rightPane.addSublayer(outline)
-        outlineLeft.borderWidth = 1.5
-        outlineLeft.isHidden = true
-        leftPane.addSublayer(outlineLeft)
-        for (band, pane) in zip(bands, [leftPane, rightPane]) {
-            band.borderColor = NSColor.controlAccentColor.cgColor
+
+        for i in 0..<2 {
+            let overlay = overlays[i]
+            overlay.masksToBounds = true
+            root.addSublayer(overlay)
+
+            let outline = outlines[i]
+            outline.fillColor = nil
+            outline.lineWidth = 1.5
+            outline.isHidden = true
+            outline.shadowColor = NSColor.black.cgColor
+            outline.shadowOpacity = 0.5
+            outline.shadowRadius = 1
+            outline.shadowOffset = .zero
+            overlay.addSublayer(outline)
+
+            let br = brackets[i]
+            br.fillColor = nil
+            br.lineWidth = 3
+            br.lineCap = .square
+            br.isHidden = true
+            overlay.addSublayer(br)
+
+            let label = labels[i]
+            label.fontSize = 11
+            label.font = NSFont.systemFont(ofSize: 11, weight: .semibold)
+            label.foregroundColor = NSColor.white.cgColor
+            label.backgroundColor = NSColor(white: 0, alpha: 0.55).cgColor
+            label.cornerRadius = 9
+            label.alignmentMode = .center
+            label.isHidden = true
+            overlay.addSublayer(label)
+
+            let band = bands[i]
+            band.borderColor = CompareView.accent.cgColor
             band.borderWidth = 1.5
-            band.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.12).cgColor
+            band.backgroundColor = CompareView.accent.withAlphaComponent(0.12).cgColor
             band.isHidden = true
-            pane.addSublayer(band)
+            overlay.addSublayer(band)
         }
+
+        dividerLine.backgroundColor = NSColor.white.cgColor
+        dividerLine.shadowColor = NSColor.black.cgColor
+        dividerLine.shadowOpacity = 0.35
+        dividerLine.shadowRadius = 2
+        dividerLine.shadowOffset = .zero
+        root.addSublayer(dividerLine)
+        dividerHandle.backgroundColor = NSColor.white.cgColor
+        dividerHandle.cornerRadius = 16
+        dividerHandle.shadowColor = NSColor.black.cgColor
+        dividerHandle.shadowOpacity = 0.3
+        dividerHandle.shadowRadius = 4
+        dividerHandle.shadowOffset = CGSize(width: 0, height: 1)
+        dividerHandle.contentsGravity = .center
+        root.addSublayer(dividerHandle)
+        updateColors()
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }
@@ -119,6 +193,30 @@ final class CompareView: NSView {
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
     override var wantsUpdateLayer: Bool { true }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        updateColors()
+    }
+
+    private func updateColors() {
+        let dark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        layer?.backgroundColor = (dark ? NSColor(srgbRed: 0.11, green: 0.11, blue: 0.118, alpha: 1)
+                                       : NSColor(srgbRed: 0.91, green: 0.91, blue: 0.918, alpha: 1)).cgColor
+        gutter.backgroundColor = (dark ? NSColor(white: 0.07, alpha: 1) : NSColor(white: 0.8, alpha: 1)).cgColor
+        let config = NSImage.SymbolConfiguration(pointSize: 12, weight: .semibold)
+        if let img = NSImage(systemSymbolName: "chevron.left.chevron.right", accessibilityDescription: "Divider")?
+            .withSymbolConfiguration(config) {
+            let tinted = NSImage(size: img.size, flipped: false) { rect in
+                img.draw(in: rect)
+                NSColor(white: 0.15, alpha: 1).set()
+                rect.fill(using: .sourceAtop)
+                return true
+            }
+            dividerHandle.contents = tinted
+            dividerHandle.contentsScale = window?.backingScaleFactor ?? 2
+        }
+    }
 
     // MARK: Content
 
@@ -139,19 +237,21 @@ final class CompareView: NSView {
         faceLayers.forEach { $0.removeFromSuperlayer() }
         faceLayers = []
         for face in list {
-            for pane in [leftPane, rightPane] {
-                let l = CAShapeLayer()
-                l.fillColor = nil
-                l.lineWidth = 1.5
-                if face.status == .enhanced {
-                    l.strokeColor = NSColor.systemGreen.cgColor
-                } else {
-                    l.strokeColor = NSColor.systemOrange.cgColor
-                    l.lineDashPattern = [5, 4]
-                }
-                pane.insertSublayer(l, below: outline.superlayer === pane ? outline : outlineLeft)
-                faceLayers.append(l)
+            let l = CAShapeLayer()
+            l.fillColor = nil
+            l.lineWidth = 1.5
+            l.shadowColor = NSColor.black.cgColor
+            l.shadowOpacity = 0.5
+            l.shadowRadius = 1
+            l.shadowOffset = .zero
+            if face.status == .enhanced {
+                l.strokeColor = NSColor.systemGreen.cgColor
+            } else {
+                l.strokeColor = NSColor.systemOrange.cgColor
+                l.lineDashPattern = [5, 4]
             }
+            rightPane.addSublayer(l)
+            faceLayers.append(l)
         }
         applyTransform(notify: false)
     }
@@ -165,32 +265,39 @@ final class CompareView: NSView {
         applyTransform(notify: false)
     }
 
-    /// The region the preview covers or is about to cover, in displayed source pixels.
-    /// Moves with every zoom and pan; pulses while the server is working on it.
-    func setPreviewBox(_ region: Region?, state: BoxState) {
+    /// The region the preview covers or is about to cover, in displayed source pixels,
+    /// with its label (e.g. "Preview area  2048 × 1536"). Ready: a quiet white
+    /// outline with corner brackets. Pending or rendering: marching orange dashes,
+    /// and the old result inside is dimmed.
+    func setPreviewBox(_ region: Region?, state: BoxState, label: String) {
         box = region.map { CGRect(x: $0.x, y: $0.y, width: $0.w, height: $0.h) }
-        // Pending and rendering look the same, so the pulse doesn't restart when the request goes out.
-        let style: (BoxState) -> Int = { $0 == .ready ? 1 : $0 == .failed ? 2 : 0 }
-        if style(state) != style(boxState) || (style(state) == 0 && outline.animation(forKey: "pulse") == nil) {
+        if label != boxLabel {
+            boxLabel = label
+            for l in labels { l.string = label }
+        }
+        if state != boxState {
             withoutAnimation {
-                for o in [outline, outlineLeft] {
-                    o.removeAnimation(forKey: "pulse")
-                    o.opacity = 1
+                for (o, br) in zip(outlines, brackets) {
+                    o.removeAnimation(forKey: "march")
                     switch state {
                     case .pending, .rendering:
-                        o.borderColor = NSColor.systemYellow.withAlphaComponent(0.9).cgColor
-                        let pulse = CABasicAnimation(keyPath: "opacity")
-                        pulse.fromValue = 1
-                        pulse.toValue = 0.15
-                        pulse.duration = 0.6
-                        pulse.autoreverses = true
-                        pulse.repeatCount = .infinity
-                        pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                        o.add(pulse, forKey: "pulse")
+                        o.strokeColor = CompareView.accent.cgColor
+                        o.lineDashPattern = [6, 4]
+                        let march = CABasicAnimation(keyPath: "lineDashPhase")
+                        march.fromValue = 0
+                        march.toValue = -10
+                        march.duration = 0.5
+                        march.repeatCount = .infinity
+                        o.add(march, forKey: "march")
+                        br.strokeColor = CompareView.accent.cgColor
                     case .ready:
-                        o.borderColor = NSColor(white: 1, alpha: 0.8).cgColor
+                        o.strokeColor = NSColor(white: 1, alpha: 0.85).cgColor
+                        o.lineDashPattern = nil
+                        br.strokeColor = NSColor.white.cgColor
                     case .failed:
-                        o.borderColor = NSColor.systemOrange.cgColor
+                        o.strokeColor = NSColor.systemOrange.cgColor
+                        o.lineDashPattern = nil
+                        br.strokeColor = NSColor.systemOrange.cgColor
                     }
                 }
             }
@@ -204,33 +311,79 @@ final class CompareView: NSView {
         selection = rect
     }
 
+    /// Puts the Split divider through the middle of a newly chosen area (once; after
+    /// that it only moves when dragged).
+    func centerDivider(on rect: CGRect) {
+        guard mode == .split, bounds.width > 0, scale > 0 else { return }
+        let o = origin(in: paneSize)
+        let x = o.x + rect.midX * scale
+        dividerFraction = min(max(x / bounds.width, 0.05), 0.95)
+        layoutPanes()
+        applyTransform(notify: false)
+    }
+
     // MARK: Geometry
 
     private var backingScale: CGFloat { window?.backingScaleFactor ?? 2 }
     private var paneSize: CGSize { leftPane.bounds.size }
+    private var dividerX: CGFloat { (bounds.width * dividerFraction).rounded() }
 
     var zoomPercent: Double { Double(scale * backingScale * 100) }
 
     private var fitScale: CGFloat {
         guard imageSize.width > 0, imageSize.height > 0, paneSize.width > 0 else { return 1 }
-        return min(paneSize.width / imageSize.width, paneSize.height / imageSize.height)
+        // Leave a margin around the photo at Fit.
+        let w = max(paneSize.width - 32, 1)
+        let h = max(paneSize.height - 32, 1)
+        return min(w / imageSize.width, h / imageSize.height)
     }
 
     override func layout() {
         super.layout()
+        layoutPanes()
+        // A bigger window can leave the zoom below the new Fit: snap back to Fit.
+        if fitMode || scale < min(fitScale, 1 / backingScale) - 0.0001 { fit() } else { applyTransform() }
+    }
+
+    private func layoutPanes() {
         withoutAnimation {
             let w = bounds.width
-            let half = floor((w - 1) / 2)
-            leftPane.frame = CGRect(x: 0, y: 0, width: half, height: bounds.height)
-            divider.frame = CGRect(x: half, y: 0, width: 1, height: bounds.height)
-            rightPane.frame = CGRect(x: half + 1, y: 0, width: w - half - 1, height: bounds.height)
+            let h = bounds.height
+            switch mode {
+            case .split:
+                leftPane.frame = bounds
+                rightPane.frame = bounds
+                let x = dividerX
+                rightMask.frame = CGRect(x: x, y: 0, width: max(0, w - x), height: h)
+                rightPane.mask = rightMask
+                gutter.isHidden = true
+                overlays[0].frame = bounds
+                overlays[1].isHidden = true
+                dividerLine.isHidden = false
+                dividerHandle.isHidden = false
+                dividerLine.frame = CGRect(x: x - 1, y: 0, width: 2, height: h)
+                dividerHandle.frame = CGRect(x: x - 16, y: h / 2 - 16, width: 32, height: 32)
+            case .sideBySide:
+                let g: CGFloat = 4
+                let half = floor((w - g) / 2)
+                rightPane.mask = nil
+                leftPane.frame = CGRect(x: 0, y: 0, width: half, height: h)
+                gutter.isHidden = false
+                gutter.frame = CGRect(x: half, y: 0, width: g, height: h)
+                rightPane.frame = CGRect(x: half + g, y: 0, width: w - half - g, height: h)
+                overlays[0].frame = leftPane.frame
+                overlays[1].frame = rightPane.frame
+                overlays[1].isHidden = false
+                dividerLine.isHidden = true
+                dividerHandle.isHidden = true
+            }
         }
-        if fitMode { fit() } else { applyTransform() }
     }
 
     override func viewDidChangeBackingProperties() {
         super.viewDidChangeBackingProperties()
         for l in [leftImage, rightBase, rightPreview] { l.contentsScale = 1 }
+        updateColors()
         applyTransform()
     }
 
@@ -246,6 +399,7 @@ final class CompareView: NSView {
         guard imageSize.width > 0 else { return }
         let o = origin(in: paneSize)
         let pixelZoom = scale * backingScale
+        let stale = boxState != .ready && boxState != nil
         withoutAnimation {
             for l in [leftImage, rightBase] {
                 l.bounds = CGRect(origin: .zero, size: imageSize)
@@ -253,12 +407,14 @@ final class CompareView: NSView {
                 l.transform = CATransform3DMakeScale(scale, scale, 1)
                 l.magnificationFilter = pixelZoom > 1.01 ? .nearest : .linear
             }
-            rightBase.opacity = Float(enhancedIsOriginal ? 1 : 0.35)
-            if let previewImage, previewRegion.width > 0 {
+            rightPane.isHidden = peekingBefore && mode == .split
+            rightBase.opacity = Float(enhancedIsOriginal || peekingBefore ? 1 : 0.5)
+            if let previewImage, previewRegion.width > 0, !peekingBefore {
                 let pw = CGFloat(previewImage.width)
                 let ph = CGFloat(previewImage.height)
                 let s = scale * previewRegion.width / pw
                 rightPreview.isHidden = false
+                rightPreview.opacity = stale ? 0.55 : 1
                 rightPreview.bounds = CGRect(x: 0, y: 0, width: pw, height: ph)
                 rightPreview.position = CGPoint(x: o.x + previewRegion.minX * scale, y: o.y + previewRegion.minY * scale)
                 rightPreview.transform = CATransform3DMakeScale(s, s, 1)
@@ -266,23 +422,37 @@ final class CompareView: NSView {
             } else {
                 rightPreview.isHidden = true
             }
-            if let box, box.width > 0 {
-                let frame = paneRect(box, origin: o).insetBy(dx: -1.5, dy: -1.5)
-                for l in [outline, outlineLeft] {
-                    l.isHidden = false
-                    l.frame = frame
+            for i in 0..<2 {
+                let outline = outlines[i], br = brackets[i], label = labels[i]
+                if let box, box.width > 0, !peekingBefore {
+                    let frame = paneRect(box, origin: o)
+                    outline.isHidden = false
+                    outline.frame = frame
+                    outline.path = CGPath(rect: CGRect(origin: .zero, size: frame.size), transform: nil)
+                    br.isHidden = false
+                    br.frame = frame
+                    br.path = bracketPath(frame.size)
+                    let text = boxLabel as NSString
+                    let tw = ceil(text.size(withAttributes: [.font: NSFont.systemFont(ofSize: 11, weight: .semibold)]).width) + 20
+                    label.isHidden = boxLabel.isEmpty || frame.width < 60
+                    let above = frame.minY - 26
+                    label.frame = CGRect(x: frame.minX, y: above >= 4 ? above : frame.minY + 6, width: tw, height: 20)
+                    label.contentsScale = backingScale
+                } else {
+                    outline.isHidden = true
+                    br.isHidden = true
+                    label.isHidden = true
                 }
-            } else {
-                outline.isHidden = true
-                outlineLeft.isHidden = true
             }
-            for (i, face) in faces.enumerated() {
+            for (i, face) in faces.enumerated() where i < faceLayers.count {
                 let r = CGRect(x: face.box.x, y: face.box.y, width: face.box.w, height: face.box.h)
                 let frame = paneRect(r, origin: o)
-                for l in faceLayers[(2 * i)..<(2 * i + 2)] {
-                    l.frame = frame
-                    l.path = CGPath(rect: CGRect(origin: .zero, size: frame.size), transform: nil)
-                }
+                let l = faceLayers[i]
+                l.isHidden = peekingBefore
+                l.frame = frame
+                let radius = min(6, frame.width / 4, frame.height / 4)
+                l.path = CGPath(roundedRect: CGRect(origin: .zero, size: frame.size),
+                                cornerWidth: radius, cornerHeight: radius, transform: nil)
             }
             if let band = bandRect, band.width > 0 {
                 for l in bands {
@@ -294,6 +464,18 @@ final class CompareView: NSView {
             }
         }
         if notify { reportViewport() }
+    }
+
+    /// Four 10 pt corner brackets just outside the box.
+    private func bracketPath(_ size: CGSize) -> CGPath {
+        let p = CGMutablePath()
+        let a: CGFloat = min(10, size.width / 3, size.height / 3)
+        let w = size.width, h = size.height
+        p.move(to: CGPoint(x: 0, y: a)); p.addLine(to: .zero); p.addLine(to: CGPoint(x: a, y: 0))
+        p.move(to: CGPoint(x: w - a, y: 0)); p.addLine(to: CGPoint(x: w, y: 0)); p.addLine(to: CGPoint(x: w, y: a))
+        p.move(to: CGPoint(x: w, y: h - a)); p.addLine(to: CGPoint(x: w, y: h)); p.addLine(to: CGPoint(x: w - a, y: h))
+        p.move(to: CGPoint(x: a, y: h)); p.addLine(to: CGPoint(x: 0, y: h)); p.addLine(to: CGPoint(x: 0, y: h - a))
+        return p
     }
 
     private func paneRect(_ r: CGRect, origin o: CGPoint) -> CGRect {
@@ -352,15 +534,26 @@ final class CompareView: NSView {
         applyTransform()
     }
 
+    var canZoomIn: Bool { imageSize.width > 0 && scale < CompareView.maxZoom / backingScale - 0.0001 }
+    var canZoomOut: Bool { imageSize.width > 0 && scale > min(fitScale, 1 / backingScale) + 0.0001 }
+
     func actualSize() { setScale(1 / backingScale, anchor: nil) }
     func zoomIn() { setScale(scale * 2, anchor: nil) }
     func zoomOut() { setScale(scale / 2, anchor: nil) }
+    /// Zoom to a percentage (100 = one image pixel per screen pixel).
+    func zoom(toPercent p: Double) { setScale(CGFloat(p / 100) / backingScale, anchor: nil) }
 
     /// Zooms keeping the image point under `anchor` (pane coordinates) fixed.
     private func setScale(_ newScale: CGFloat, anchor: CGPoint?) {
         guard imageSize.width > 0 else { return }
-        let minScale = min(fitScale, 0.05 / backingScale)
-        let maxScale = 32 / backingScale
+        // Zoom out no further than Fit (or 100% for a photo smaller than the window),
+        // and in no further than 800%.
+        let minScale = min(fitScale, 1 / backingScale)
+        let maxScale = CompareView.maxZoom / backingScale
+        if newScale <= fitScale + 0.0001, fitScale <= 1 / backingScale {
+            fit()
+            return
+        }
         let s = min(max(newScale, minScale), maxScale)
         let pane = paneSize
         let a = anchor ?? CGPoint(x: pane.width / 2, y: pane.height / 2)
@@ -392,6 +585,13 @@ final class CompareView: NSView {
         return CGPoint(x: p.x - pane.minX, y: p.y - pane.minY)
     }
 
+    private func nearDivider(_ event: NSEvent) -> Bool {
+        guard mode == .split else { return false }
+        let p = convert(event.locationInWindow, from: nil)
+        if abs(p.x - dividerX) <= 6 { return true }
+        return dividerHandle.frame.insetBy(dx: -4, dy: -4).contains(p)
+    }
+
     override func scrollWheel(with event: NSEvent) {
         if event.modifierFlags.contains(.command) || !event.hasPreciseScrollingDeltas {
             let factor = exp(event.scrollingDeltaY * (event.hasPreciseScrollingDeltas ? 0.01 : 0.1))
@@ -417,9 +617,17 @@ final class CompareView: NSView {
             }
             return
         }
+        if nearDivider(event) {
+            drag = .divider
+            return
+        }
         drag = .pan
         if event.clickCount == 2 {
-            if fitMode {
+            if let box, box.contains(imagePoint(event)), fitMode {
+                // Double-click inside the preview area: look at it at 100%.
+                center = CGPoint(x: box.midX, y: box.midY)
+                setScale(1 / backingScale, anchor: nil)
+            } else if fitMode {
                 setScale(1 / backingScale, anchor: paneLocation(event))
             } else {
                 fit()
@@ -429,6 +637,11 @@ final class CompareView: NSView {
 
     override func mouseDragged(with event: NSEvent) {
         switch drag {
+        case .divider:
+            let p = convert(event.locationInWindow, from: nil)
+            guard bounds.width > 0 else { return }
+            dividerFraction = min(max(p.x / bounds.width, 0), 1)
+            layoutPanes()
         case .draw(let a, _):
             drag = .draw(from: a, to: imagePoint(event))
             applyTransform(notify: false)
@@ -444,6 +657,7 @@ final class CompareView: NSView {
         defer {
             drag = nil
             applyTransform(notify: false)
+            window?.invalidateCursorRects(for: self)
         }
         switch drag {
         case .draw(let a, let b):
@@ -475,8 +689,18 @@ final class CompareView: NSView {
             drag = nil
             applyTransform(notify: false)
             onCancelSelect?()
+        } else if event.charactersIgnoringModifiers == "\\", event.modifierFlags.intersection(.deviceIndependentFlagsMask).isEmpty {
+            peekingBefore = true
         } else {
             super.keyDown(with: event)
+        }
+    }
+
+    override func keyUp(with event: NSEvent) {
+        if event.charactersIgnoringModifiers == "\\" {
+            peekingBefore = false
+        } else {
+            super.keyUp(with: event)
         }
     }
 
@@ -488,6 +712,9 @@ final class CompareView: NSView {
     override func resetCursorRects() {
         let selecting = selectMode || NSEvent.modifierFlags.contains(.shift)
         addCursorRect(bounds, cursor: selecting ? .crosshair : .openHand)
+        if mode == .split, !selecting {
+            addCursorRect(CGRect(x: dividerX - 6, y: 0, width: 12, height: bounds.height), cursor: .resizeLeftRight)
+        }
     }
 }
 
@@ -509,11 +736,12 @@ struct CompareViewRepresentable: NSViewRepresentable {
 
     func updateNSView(_ view: CompareView, context: Context) {
         view.setOriginal(model.image, size: model.imageSize)
+        view.mode = model.compareMode
         view.selectMode = model.isSelectingArea
         view.setSelection(model.selection)
         let noSteps = model.signature.items.isEmpty
         view.enhancedIsOriginal = noSteps
         view.setPreview(noSteps ? nil : model.preview?.image, region: noSteps ? nil : model.preview?.region)
-        view.setFaces(noSteps || !model.showFaces ? [] : model.preview?.faces ?? [])
+        view.setFaces(noSteps || !model.showFaces || !model.hasFaceStep ? [] : model.preview?.faces ?? [])
     }
 }
