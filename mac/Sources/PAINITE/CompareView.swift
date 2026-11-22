@@ -12,12 +12,40 @@ import SwiftUI
 final class CompareView: NSView {
     /// Visible rectangle in displayed source pixels, and zoom in percent (100 = one image pixel per screen pixel).
     var onViewportChange: ((CGRect, Double) -> Void)?
+    /// A new preview area picked by dragging, in displayed source pixels.
+    var onSelectArea: ((CGRect) -> Void)?
+    /// Called when Esc ends Select Area without a selection.
+    var onCancelSelect: (() -> Void)?
+
+    /// When on, a drag picks the preview area instead of panning. Shift-drag
+    /// does the same at any time.
+    var selectMode = false {
+        didSet {
+            guard oldValue != selectMode else { return }
+            window?.invalidateCursorRects(for: self)
+        }
+    }
 
     private var original: CGImage?
     private var previewImage: CGImage?
     private var previewRegion: CGRect = .zero
     private var imageSize: CGSize = .zero
     private var box: CGRect?
+    /// The picked area (before tile snapping), which a drag inside the box moves.
+    private var selection: CGRect?
+    private var drag: Drag?
+
+    private enum Drag {
+        case pan
+        /// Drawing a new area from this image point.
+        case draw(from: CGPoint, to: CGPoint)
+        /// Moving the selection by the distance from this image point.
+        case move(from: CGPoint, to: CGPoint, original: CGRect)
+    }
+    /// With no steps the enhanced side is just the original, shown undimmed.
+    var enhancedIsOriginal = false {
+        didSet { if oldValue != enhancedIsOriginal { applyTransform(notify: false) } }
+    }
     private var boxState: BoxState = .pending
 
     enum BoxState {
@@ -41,6 +69,10 @@ final class CompareView: NSView {
     private let rightBase = CALayer()
     private let rightPreview = CALayer()
     private let outline = CALayer()
+    /// The same box on the original side.
+    private let outlineLeft = CALayer()
+    /// The area being drawn or moved, in both panes.
+    private let bands = [CALayer(), CALayer()]
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -67,6 +99,16 @@ final class CompareView: NSView {
         outline.borderWidth = 1.5
         outline.isHidden = true
         rightPane.addSublayer(outline)
+        outlineLeft.borderWidth = 1.5
+        outlineLeft.isHidden = true
+        leftPane.addSublayer(outlineLeft)
+        for (band, pane) in zip(bands, [leftPane, rightPane]) {
+            band.borderColor = NSColor.controlAccentColor.cgColor
+            band.borderWidth = 1.5
+            band.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.12).cgColor
+            band.isHidden = true
+            pane.addSublayer(band)
+        }
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }
@@ -104,28 +146,35 @@ final class CompareView: NSView {
         let style: (BoxState) -> Int = { $0 == .ready ? 1 : $0 == .failed ? 2 : 0 }
         if style(state) != style(boxState) || (style(state) == 0 && outline.animation(forKey: "pulse") == nil) {
             withoutAnimation {
-                outline.removeAnimation(forKey: "pulse")
-                outline.opacity = 1
-                switch state {
-                case .pending, .rendering:
-                    outline.borderColor = NSColor.systemYellow.withAlphaComponent(0.9).cgColor
-                    let pulse = CABasicAnimation(keyPath: "opacity")
-                    pulse.fromValue = 1
-                    pulse.toValue = 0.15
-                    pulse.duration = 0.6
-                    pulse.autoreverses = true
-                    pulse.repeatCount = .infinity
-                    pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                    outline.add(pulse, forKey: "pulse")
-                case .ready:
-                    outline.borderColor = NSColor(white: 1, alpha: 0.8).cgColor
-                case .failed:
-                    outline.borderColor = NSColor.systemOrange.cgColor
+                for o in [outline, outlineLeft] {
+                    o.removeAnimation(forKey: "pulse")
+                    o.opacity = 1
+                    switch state {
+                    case .pending, .rendering:
+                        o.borderColor = NSColor.systemYellow.withAlphaComponent(0.9).cgColor
+                        let pulse = CABasicAnimation(keyPath: "opacity")
+                        pulse.fromValue = 1
+                        pulse.toValue = 0.15
+                        pulse.duration = 0.6
+                        pulse.autoreverses = true
+                        pulse.repeatCount = .infinity
+                        pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                        o.add(pulse, forKey: "pulse")
+                    case .ready:
+                        o.borderColor = NSColor(white: 1, alpha: 0.8).cgColor
+                    case .failed:
+                        o.borderColor = NSColor.systemOrange.cgColor
+                    }
                 }
             }
         }
         boxState = state
         applyTransform(notify: false)
+    }
+
+    /// The picked area, so a drag inside the box can move it.
+    func setSelection(_ rect: CGRect?) {
+        selection = rect
     }
 
     // MARK: Geometry
@@ -177,7 +226,7 @@ final class CompareView: NSView {
                 l.transform = CATransform3DMakeScale(scale, scale, 1)
                 l.magnificationFilter = pixelZoom > 1.01 ? .nearest : .linear
             }
-            rightBase.opacity = 0.35
+            rightBase.opacity = Float(enhancedIsOriginal ? 1 : 0.35)
             if let previewImage, previewRegion.width > 0 {
                 let pw = CGFloat(previewImage.width)
                 let ph = CGFloat(previewImage.height)
@@ -191,15 +240,53 @@ final class CompareView: NSView {
                 rightPreview.isHidden = true
             }
             if let box, box.width > 0 {
-                outline.isHidden = false
-                outline.frame = CGRect(x: o.x + box.minX * scale, y: o.y + box.minY * scale,
-                                       width: box.width * scale, height: box.height * scale)
-                    .insetBy(dx: -1.5, dy: -1.5)
+                let frame = paneRect(box, origin: o).insetBy(dx: -1.5, dy: -1.5)
+                for l in [outline, outlineLeft] {
+                    l.isHidden = false
+                    l.frame = frame
+                }
             } else {
                 outline.isHidden = true
+                outlineLeft.isHidden = true
+            }
+            if let band = bandRect, band.width > 0 {
+                for l in bands {
+                    l.isHidden = false
+                    l.frame = paneRect(band, origin: o)
+                }
+            } else {
+                for l in bands { l.isHidden = true }
             }
         }
         if notify { reportViewport() }
+    }
+
+    private func paneRect(_ r: CGRect, origin o: CGPoint) -> CGRect {
+        CGRect(x: o.x + r.minX * scale, y: o.y + r.minY * scale, width: r.width * scale, height: r.height * scale)
+    }
+
+    /// The area being drawn or moved, clipped to the image.
+    private var bandRect: CGRect? {
+        let bounds = CGRect(origin: .zero, size: imageSize)
+        switch drag {
+        case .draw(let a, let b):
+            return CGRect(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(a.x - b.x), height: abs(a.y - b.y))
+                .intersection(bounds)
+        case .move(let a, let b, let r):
+            var moved = r.offsetBy(dx: b.x - a.x, dy: b.y - a.y)
+            moved.origin.x = min(max(moved.minX, 0), max(0, imageSize.width - moved.width))
+            moved.origin.y = min(max(moved.minY, 0), max(0, imageSize.height - moved.height))
+            return moved
+        default:
+            return nil
+        }
+    }
+
+    /// The image point under an event, in displayed source pixels.
+    private func imagePoint(_ event: NSEvent) -> CGPoint {
+        let p = paneLocation(event)
+        let o = origin(in: paneSize)
+        return CGPoint(x: (p.x - o.x) / scale, y: (p.y - o.y) / scale)
     }
 
     private func reportViewport() {
@@ -285,6 +372,17 @@ final class CompareView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)
+        guard imageSize.width > 0, scale > 0 else { return }
+        if selectMode || event.modifierFlags.contains(.shift) {
+            let p = imagePoint(event)
+            if let sel = selection, let box, box.contains(p) {
+                drag = .move(from: p, to: p, original: sel)
+            } else {
+                drag = .draw(from: p, to: p)
+            }
+            return
+        }
+        drag = .pan
         if event.clickCount == 2 {
             if fitMode {
                 setScale(1 / backingScale, anchor: paneLocation(event))
@@ -295,11 +393,66 @@ final class CompareView: NSView {
     }
 
     override func mouseDragged(with event: NSEvent) {
-        pan(dx: event.deltaX, dy: event.deltaY)
+        switch drag {
+        case .draw(let a, _):
+            drag = .draw(from: a, to: imagePoint(event))
+            applyTransform(notify: false)
+        case .move(let a, _, let r):
+            drag = .move(from: a, to: imagePoint(event), original: r)
+            applyTransform(notify: false)
+        default:
+            pan(dx: event.deltaX, dy: event.deltaY)
+        }
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        defer {
+            drag = nil
+            applyTransform(notify: false)
+        }
+        switch drag {
+        case .draw(let a, let b):
+            // A click (or a tiny drag) centers the current box on that point.
+            if abs(a.x - b.x) * scale < 6 || abs(a.y - b.y) * scale < 6 {
+                let size = selection?.size ?? box?.size ?? .zero
+                guard size.width > 0 else { return }
+                let r = CGRect(x: a.x - size.width / 2, y: a.y - size.height / 2, width: size.width, height: size.height)
+                onSelectArea?(clampInside(r))
+            } else if let band = bandRect {
+                onSelectArea?(band)
+            }
+        case .move:
+            if let band = bandRect { onSelectArea?(band) }
+        default:
+            break
+        }
+    }
+
+    private func clampInside(_ r: CGRect) -> CGRect {
+        var r = r
+        r.origin.x = min(max(r.minX, 0), max(0, imageSize.width - r.width))
+        r.origin.y = min(max(r.minY, 0), max(0, imageSize.height - r.height))
+        return r
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if event.keyCode == 53, selectMode || drag != nil { // Esc
+            drag = nil
+            applyTransform(notify: false)
+            onCancelSelect?()
+        } else {
+            super.keyDown(with: event)
+        }
+    }
+
+    override func flagsChanged(with event: NSEvent) {
+        super.flagsChanged(with: event)
+        window?.invalidateCursorRects(for: self)
     }
 
     override func resetCursorRects() {
-        addCursorRect(bounds, cursor: .openHand)
+        let selecting = selectMode || NSEvent.modifierFlags.contains(.shift)
+        addCursorRect(bounds, cursor: selecting ? .crosshair : .openHand)
     }
 }
 
@@ -313,12 +466,18 @@ struct CompareViewRepresentable: NSViewRepresentable {
         view.onViewportChange = { [weak model] visible, zoom in
             model?.viewportChanged(visible: visible, zoomPercent: zoom)
         }
+        view.onSelectArea = { [weak model] rect in model?.selectArea(rect) }
+        view.onCancelSelect = { [weak model] in model?.isSelectingArea = false }
         model.viewport = view
         return view
     }
 
     func updateNSView(_ view: CompareView, context: Context) {
         view.setOriginal(model.image, size: model.imageSize)
-        view.setPreview(model.preview?.image, region: model.preview?.region)
+        view.selectMode = model.isSelectingArea
+        view.setSelection(model.selection)
+        let noSteps = model.signature.items.isEmpty
+        view.enhancedIsOriginal = noSteps
+        view.setPreview(noSteps ? nil : model.preview?.image, region: noSteps ? nil : model.preview?.region)
     }
 }

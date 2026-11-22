@@ -85,7 +85,7 @@ def test_adapter_runs_and_preview_matches_export(tmp_path, tiny_esrgan, op, scal
     assert 0 <= out.min() and out.max() <= 1
 
     src = make_image(tmp_path / "in.tif", 150, 110, fmt="tiff")
-    kw = dict(model=model, params={"strength": 0.7} if scale == 1 else {}, output={}, work_dir=tmp_path,
+    kw = dict(steps=[pipeline.Step(model, {"strength": 0.7} if scale == 1 else {})], output={}, work_dir=tmp_path,
               results_dir=tmp_path, tile=48, overlap=16, max_output_pixels=10**9,
               on_progress=lambda p: None, is_canceled=lambda: False)
     full = pipeline.run(src, region=None, job_id="full", **kw)
