@@ -19,7 +19,7 @@ import pyvips
 
 from ..errors import ApiError
 from ..models import Model
-from .geometry import Rect
+from .geometry import Rect, display_point_to_stored, displayed_size
 
 LOADERS = {"jpegload": "jpeg", "jpegload_source": "jpeg", "tiffload": "tiff", "tiffload_source": "tiff"}
 FORMAT_EXT = {"jpeg": ".jpg", "tiff": ".tif"}
@@ -117,6 +117,9 @@ def run(
     out_w, out_h = area.w * model.scale, area.h * model.scale
     if out_w * out_h > max_output_pixels:
         raise ApiError(422, "too_many_pixels", f"output would have {out_w * out_h} pixels; limit is {max_output_pixels}")
+    if model.whole_image:
+        result = _run_whole_image(src, source_path, model, params, area, maxval, timings, on_progress, is_canceled)
+        return _finish(src, result, model.scale, output, work_dir, results_dir, job_id, timings)
     # Decode only the area plus the context its edge tiles need.
     pad = max(overlap, model.receptive_padding)
     wx0, wy0 = max(area.x - pad, 0), max(area.y - pad, 0)
@@ -131,10 +134,14 @@ def run(
     # Tile grid is anchored at the full image's origin; shift it into the window.
     result = _process_tiles(pixels, local, (wx0, wy0), model, params, tile, pad, on_progress, is_canceled)
     timings["inference"] = (time.perf_counter() - t1) * 1000
+    return _finish(src, result, model.scale, output, work_dir, results_dir, job_id, timings)
 
+
+def _finish(src: pyvips.Image, result: np.ndarray, scale: int, output: dict, work_dir: Path, results_dir: Path,
+            job_id: str, timings: dict[str, float]) -> JobOutput:
     t2 = time.perf_counter()
     fmt = output.get("format") or ("tiff" if src.get("vips-loader").startswith("tiff") else "jpeg")
-    out_path = _encode(src, result, model.scale, fmt, int(output.get("jpeg_quality", 92)), work_dir, results_dir, job_id)
+    out_path = _encode(src, result, scale, fmt, int(output.get("jpeg_quality", 92)), work_dir, results_dir, job_id)
     timings["encode"] = (time.perf_counter() - t2) * 1000
 
     digest = hashlib.sha256()
@@ -150,6 +157,57 @@ def run(
         height=result.shape[0],
         timings_ms=timings,
     )
+
+
+def _decode(src: pyvips.Image, r: Rect, maxval: float) -> np.ndarray:
+    px = src.crop(r.x, r.y, r.w, r.h).numpy().astype(np.float32) / maxval
+    return px[:, :, None] if px.ndim == 2 else px
+
+
+def _run_whole_image(
+    src: pyvips.Image,
+    source_path: Path,
+    model: Model,
+    params: dict,
+    area: Rect,
+    maxval: float,
+    timings: dict[str, float],
+    on_progress: Callable[[float], None],
+    is_canceled: Callable[[], bool],
+) -> np.ndarray:
+    """Models that look at the whole image (face): detect on a downscaled copy
+    of the full image, then decode only the area plus whatever the model needs
+    around it. Detection never depends on the region, so a preview matches
+    the same pixels of an export."""
+    t0 = time.perf_counter()
+    width, height = src.width, src.height
+    # Faces are detected upright: in displayed (EXIF-orientation-applied)
+    # pixels, then mapped back to stored pixels.
+    fields = src.get_fields()
+    orientation = src.get("orientation") if "orientation" in fields else 1
+    orientation = orientation if 1 <= orientation <= 8 else 1
+    disp_w, disp_h = displayed_size(width, height, orientation)
+    dw, dh = model.detection_size(disp_w, disp_h)
+
+    def small() -> np.ndarray:
+        img = src.autorot() if orientation != 1 else src
+        if (dw, dh) != (disp_w, disp_h):
+            img = img.resize(dw / disp_w, vscale=dh / disp_h)
+        return _decode(img, Rect(0, 0, dw, dh), maxval)
+
+    st = source_path.stat()
+    dets = model.detections((str(source_path), st.st_mtime_ns, st.st_size), small, disp_w, disp_h)
+    if orientation != 1:
+        dets = [(score, np.array([display_point_to_stored(x, y, width, height, orientation) for x, y in pts]))
+                for score, pts in dets]
+    faces = model.layout(dets, 1, width, height)
+    need = model.input_rect(faces, area)
+    window = _decode(src, need, maxval)
+    timings["decode"] = (time.perf_counter() - t0) * 1000
+    t1 = time.perf_counter()
+    result = model.run_area(window, (need.x, need.y), area, faces, params.get("strength"), on_progress, is_canceled)
+    timings["inference"] = (time.perf_counter() - t1) * 1000
+    return result
 
 
 def _process_tiles(

@@ -4,7 +4,7 @@
 import Foundation
 
 public enum Operation: String, Codable, CaseIterable, Sendable, Identifiable {
-    case denoise, sharpen, upscale2x
+    case denoise, sharpen, upscale2x, face
 
     public var id: String { rawValue }
 
@@ -13,6 +13,7 @@ public enum Operation: String, Codable, CaseIterable, Sendable, Identifiable {
         case .denoise: "Denoise"
         case .sharpen: "Sharpen"
         case .upscale2x: "Upscale 2×"
+        case .face: "Enhance faces"
         }
     }
 

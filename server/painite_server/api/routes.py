@@ -72,7 +72,7 @@ class JobRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     source_id: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     kind: Literal["preview", "full"]
-    operation: Literal["denoise", "sharpen", "upscale2x"]
+    operation: Literal["denoise", "sharpen", "upscale2x", "face"]
     params: ParamsIn = Field(default_factory=ParamsIn)
     model: str | None = None
     region: RegionIn | None = None

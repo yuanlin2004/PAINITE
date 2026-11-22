@@ -36,7 +36,7 @@ const (
 const usage = `painite enhances photos on a PAINITE inference server.
 
 Usage:
-  painite enhance --op <denoise|sharpen|upscale2x> [--strength 0..1] -o <file|dir> [flags] <input>...
+  painite enhance --op <denoise|sharpen|upscale2x|face> [--strength 0..1] -o <file|dir> [flags] <input>...
   painite trust --fingerprint SHA256:<hex>
   painite status [--json]
   painite config set <key> <value>
@@ -154,8 +154,8 @@ func cmdEnhance(args []string, stdout, stderr io.Writer) int {
 		strength                  optionalFloat
 		conn                      connFlags
 	)
-	fs.StringVar(&op, "op", "", "operation: denoise, sharpen, or upscale2x (required)")
-	fs.Var(&strength, "strength", "strength 0..1 for denoise and sharpen (default: server default)")
+	fs.StringVar(&op, "op", "", "operation: denoise, sharpen, upscale2x, or face (required)")
+	fs.Var(&strength, "strength", "strength 0..1 for denoise, sharpen and face (default: server default)")
 	fs.StringVar(&model, "model", "", "model ID to pin (default: server default for the operation)")
 	fs.StringVar(&format, "format", "", "output format: jpeg or tiff (default: same as input, or from -o's extension)")
 	fs.IntVar(&quality, "jpeg-quality", 92, "JPEG quality 1..100")
@@ -182,15 +182,15 @@ func cmdEnhance(args []string, stdout, stderr io.Writer) int {
 		return exitInvalid
 	}
 	switch op {
-	case "denoise", "sharpen", "upscale2x":
+	case "denoise", "sharpen", "upscale2x", "face":
 	case "":
-		return invalid("--op is required (denoise, sharpen, or upscale2x)")
+		return invalid("--op is required (denoise, sharpen, upscale2x, or face)")
 	default:
-		return invalid(fmt.Sprintf("unknown --op %q (use denoise, sharpen, or upscale2x)", op))
+		return invalid(fmt.Sprintf("unknown --op %q (use denoise, sharpen, upscale2x, or face)", op))
 	}
 	if strength.v != nil {
 		if op == "upscale2x" {
-			return invalid("--strength applies only to denoise and sharpen")
+			return invalid("--strength applies only to denoise, sharpen and face")
 		}
 		if *strength.v < 0 || *strength.v > 1 {
 			return invalid("--strength must be between 0 and 1")

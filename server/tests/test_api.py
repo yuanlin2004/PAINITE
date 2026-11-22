@@ -28,7 +28,7 @@ def test_auth_required_and_revocation(client, api):
     r = client.get("/v1/capabilities", headers=api.h)
     assert r.status_code == 200
     caps = r.json()
-    assert {o["name"] for o in caps["operations"]} == {"denoise", "sharpen", "upscale2x"}
+    assert {o["name"] for o in caps["operations"]} == {"denoise", "sharpen", "upscale2x", "face"}
     assert all(m["placeholder"] for m in caps["models"])
     client.app.state.store.revoke_token("a")
     assert client.get("/v1/capabilities", headers=api.h).status_code == 401

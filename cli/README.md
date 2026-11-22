@@ -45,6 +45,7 @@ override it, and `--endpoint`, `--token`, `--ca-file` override both.
 
 ```sh
 painite enhance --op denoise --strength 0.6 -o out/ IMG_001.jpg IMG_002.tif
+painite enhance --op face -o portraits/ *.jpg
 painite enhance --op upscale2x --json --overwrite -o big.tif small.tif
 ```
 

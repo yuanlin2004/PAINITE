@@ -27,6 +27,8 @@ class Model:
     placeholder: bool = False
     # Pixels of context each side of a tile the model needs to avoid seams.
     receptive_padding: int = 0
+    # Whole-image models (face) implement run_image() instead of run().
+    whole_image: bool = False
 
     def run(self, tile: np.ndarray) -> np.ndarray:  # float32 HxWxC in [0, 1]
         raise NotImplementedError
@@ -93,6 +95,7 @@ OPERATION_PARAMS = {
     "denoise": {"strength": {"min": 0.0, "max": 1.0, "default": 0.5}},
     "sharpen": {"strength": {"min": 0.0, "max": 1.0, "default": 0.5}},
     "upscale2x": {},
+    "face": {"strength": {"min": 0.0, "max": 1.0, "default": 0.7}},
 }
 
 
@@ -103,11 +106,18 @@ ADAPTERS: dict[str, Adapter] = {
     "identity": lambda m, d: IdentityModel(id=m.id, operation=m.operation, version=m.version, placeholder=True),
     "bilinear2x": lambda m, d: BilinearUpscale2x(id=m.id, operation=m.operation, version=m.version, placeholder=True),
     "spandrel": lambda m, d: _spandrel(m, d),
+    "face": lambda m, d: _face(m, d),
 }
 
 
 def _spandrel(m: "Manifest", d: Path) -> Model:
     from .spandrel_adapter import make  # noqa: PLC0415 - imports torch lazily
+
+    return make(m, d)
+
+
+def _face(m: "Manifest", d: Path) -> Model:
+    from .face_adapter import make  # noqa: PLC0415 - imports torch lazily
 
     return make(m, d)
 
@@ -121,6 +131,7 @@ def default_registry(data_dir: Path | None = None) -> Registry:
     reg.add(IdentityModel(id="sharpen/identity@0.1.0", operation="sharpen", version="0.1.0", placeholder=True))
     reg.add(BilinearUpscale2x(id="upscale2x/bilinear@0.1.0", operation="upscale2x", version="0.1.0",
                               placeholder=True))
+    reg.add(IdentityModel(id="face/identity@0.1.0", operation="face", version="0.1.0", placeholder=True))
     if data_dir is None:
         return reg
     from .manifest import installed  # noqa: PLC0415 - avoid import cycle
