@@ -191,7 +191,7 @@ func (c *Client) do(req *http.Request, out any) (*http.Response, error) {
 		if req.Context().Err() != nil {
 			return nil, req.Context().Err()
 		}
-		return nil, &Error{Code: "connection_failed", Message: err.Error()}
+		return nil, connError(err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
@@ -381,7 +381,7 @@ func (c *Client) DownloadResult(ctx context.Context, id string, f *os.File) (str
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			return &Error{Code: "connection_failed", Message: err.Error()}
+			return connError(err)
 		}
 		defer resp.Body.Close()
 		switch {
@@ -431,4 +431,17 @@ func (w fileWriter) Write(p []byte) (int, error) {
 		return n, writeError{err}
 	}
 	return n, nil
+}
+
+// connError explains certificate failures, which retrying cannot fix.
+func connError(err error) *Error {
+	var unknown x509.UnknownAuthorityError
+	var hostname x509.HostnameError
+	switch {
+	case errors.As(err, &unknown):
+		return &Error{Code: "tls_untrusted", Message: "server certificate is not trusted; run `painite trust --fingerprint <fingerprint>`"}
+	case errors.As(err, &hostname):
+		return &Error{Code: "tls_untrusted", Message: err.Error() + "; reissue the server certificate with `painite-server admin init --hostname <name>`"}
+	}
+	return &Error{Code: "connection_failed", Message: err.Error()}
 }

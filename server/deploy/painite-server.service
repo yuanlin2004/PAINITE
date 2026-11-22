@@ -1,0 +1,24 @@
+# systemd unit for painite-server on DGX Spark (DESIGN.md section 5, Deployment).
+#
+#   sudo cp deploy/painite-server.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now painite-server
+#
+# Uses host networking: Docker's userland port proxy (-p) can cap LAN throughput.
+[Unit]
+Description=PAINITE inference server
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Environment=PAINITE_IMAGE=painite-server:latest
+Environment=PAINITE_PORT=8443
+ExecStartPre=-/usr/bin/docker rm -f painite-server
+ExecStart=/usr/bin/docker run --rm --name painite-server --gpus all --network host \
+  -v /var/lib/painite:/var/lib/painite ${PAINITE_IMAGE} serve --port ${PAINITE_PORT}
+ExecStop=/usr/bin/docker stop -t 30 painite-server
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

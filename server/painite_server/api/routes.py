@@ -34,7 +34,11 @@ CONTENT_TYPES = {"jpeg": "image/jpeg", "tiff": "image/tiff"}
 def current_owner(request: Request, authorization: Annotated[str | None, Header()] = None) -> str:
     if not authorization or not authorization.lower().startswith("bearer "):
         raise ApiError(401, "unauthorized", "missing bearer token")
-    owner = request.app.state.store.owner_for_token(authorization[7:].strip())
+    presented = authorization[7:].strip()
+    owner = request.app.state.store.owner_for_token(presented)
+    if owner is None and presented.startswith("tok_"):
+        raise ApiError(401, "unauthorized",
+                       "that is a token id, not the token; use the pnt_ secret printed by `token create`")
     if owner is None:
         raise ApiError(401, "unauthorized", "invalid or revoked token")
     return owner
@@ -146,6 +150,18 @@ def health(request: Request) -> dict:
         "gpu": state.gpu,
         "queue": {**counts, "capacity": state.settings.queue_capacity},
     }
+
+
+@router.get("/ca.pem")
+def ca_certificate(request: Request) -> Response:
+    """The private CA certificate, so clients can pin it by fingerprint
+    (`painite trust`). Public data; no auth."""
+    from ..tls import paths  # noqa: PLC0415
+
+    ca = paths(request.app.state.settings.data_dir)["ca_cert"]
+    if not ca.exists():
+        raise not_found("this server has no private CA; run `painite-server admin init`")
+    return Response(ca.read_bytes(), media_type="application/x-pem-file")
 
 
 @router.get("/capabilities")

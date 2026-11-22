@@ -37,6 +37,7 @@ const usage = `painite enhances photos on a PAINITE inference server.
 
 Usage:
   painite enhance --op <denoise|sharpen|upscale2x> [--strength 0..1] -o <file|dir> [flags] <input>...
+  painite trust --fingerprint SHA256:<hex>
   painite status [--json]
   painite config set <key> <value>
   painite config get <key>
@@ -64,6 +65,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return cmdStatus(args[1:], stdout, stderr)
 	case "config":
 		return cmdConfig(args[1:], stdout, stderr)
+	case "trust":
+		return cmdTrust(args[1:], stdout, stderr)
 	case "version", "--version":
 		fmt.Fprintf(stdout, "painite %s\n", version)
 		return exitOK
@@ -396,5 +399,84 @@ func cmdConfig(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "painite: unknown config command %q\n", strings.Join(args, " "))
 		return exitInvalid
 	}
+	return exitOK
+}
+
+// cmdTrust pins the server's private CA after checking its fingerprint
+// against the one the operator printed on the server.
+func cmdTrust(args []string, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet("painite trust", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	var fingerprint, endpoint string
+	fs.StringVar(&fingerprint, "fingerprint", "", "CA fingerprint from `painite-server admin fingerprint`")
+	fs.StringVar(&endpoint, "endpoint", "", "server URL (default: configured endpoint)")
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return exitOK
+		}
+		return exitInvalid
+	}
+	cfg, err := config.LoadFile()
+	if err != nil {
+		fmt.Fprintf(stderr, "painite: %v\n", err)
+		return exitFailed
+	}
+	if endpoint != "" {
+		if err := cfg.Set("endpoint", endpoint); err != nil {
+			fmt.Fprintf(stderr, "painite: %v\n", err)
+			return exitInvalid
+		}
+	}
+	if cfg.Endpoint == "" {
+		fmt.Fprintln(stderr, "painite: no endpoint; pass --endpoint or run `painite config set endpoint <url>`")
+		return exitInvalid
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	pemBytes, got, err := api.FetchCA(ctx, cfg.Endpoint)
+	if err != nil {
+		fmt.Fprintf(stderr, "painite: %v\n", err)
+		return exitFailed
+	}
+	if fingerprint == "" {
+		fmt.Fprintln(stdout, got)
+		fmt.Fprintln(stderr, "painite: compare this with `painite-server admin fingerprint` on the server, "+
+			"then rerun with --fingerprint")
+		return exitFailed
+	}
+	if api.NormalizeFingerprint(fingerprint) != got {
+		fmt.Fprintf(stderr, "painite: fingerprint mismatch: server presented %s; not trusted\n", got)
+		return exitFailed
+	}
+	cfgPath, err := config.Path()
+	if err != nil {
+		fmt.Fprintf(stderr, "painite: %v\n", err)
+		return exitFailed
+	}
+	caPath := filepath.Join(filepath.Dir(cfgPath), "ca.pem")
+	if err := os.MkdirAll(filepath.Dir(caPath), 0o700); err != nil {
+		fmt.Fprintf(stderr, "painite: %v\n", err)
+		return exitFailed
+	}
+	if err := os.WriteFile(caPath, pemBytes, 0o644); err != nil {
+		fmt.Fprintf(stderr, "painite: %v\n", err)
+		return exitFailed
+	}
+	cfg.CAFile = caPath
+	if err := config.Save(cfg); err != nil {
+		fmt.Fprintf(stderr, "painite: %v\n", err)
+		return exitFailed
+	}
+	// Confirm the server's certificate now verifies, including its name.
+	client, err := api.New(cfg.Endpoint, cfg.Token, cfg.CAFile)
+	if err == nil {
+		client.Retries = 0
+		_, err = client.Health(ctx)
+	}
+	if err != nil {
+		fmt.Fprintf(stderr, "painite: CA saved to %s, but the connection still fails: %v\n", caPath, err)
+		return exitFailed
+	}
+	fmt.Fprintf(stderr, "Trusted %s for %s (saved to %s).\n", got, cfg.Endpoint, caPath)
 	return exitOK
 }

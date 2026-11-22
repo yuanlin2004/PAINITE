@@ -4,11 +4,10 @@ The PAINITE inference server (FastAPI). It implements the contract in
 [`api/openapi.yaml`](../api/openapi.yaml); the design is in
 [`docs/DESIGN.md`](../docs/DESIGN.md).
 
-**Status: skeleton.** Only placeholder models are installed: `denoise/identity`,
+**Status:** only placeholder models are built in: `denoise/identity`,
 `sharpen/identity` (both return the input), and `upscale2x/bilinear`. Real
-models replace them after the model bake-off. TLS certificate setup
-(`admin init`) is not built yet; pass `--tls-cert/--tls-key` or run on a trusted
-network.
+models are installed with `models pull` once the bake-off adds their manifests
+and adapters.
 
 ## Run locally
 
@@ -19,19 +18,50 @@ cd server
 python3 -m venv .venv && . .venv/bin/activate
 pip install -e '.[test]'
 export PAINITE_DATA_DIR=$PWD/.data
-painite-server token create --name dev      # prints the token once
+painite-server token create --name dev      # prints the pnt_… secret once (stdout)
 painite-server serve --port 8443
 ```
 
 ## Run on DGX Spark (Docker)
 
 ```sh
-docker build -t painite-server server/
+docker build -t painite-server:latest server/
 sudo mkdir -p /var/lib/painite
-docker run --rm -v /var/lib/painite:/var/lib/painite painite-server token create --name studio-mac
-docker run -d --name painite --gpus all -p 8443:8443 -v /var/lib/painite:/var/lib/painite painite-server
-curl http://spark1.local:8443/v1/health
+alias ps-admin='docker run --rm -v /var/lib/painite:/var/lib/painite painite-server:latest'
+
+# TLS: a private CA (created once) and a server certificate for the names clients use.
+ps-admin admin init --hostname spark1 --hostname spark1.local --ip 192.168.29.160
+#   prints the CA fingerprint; on each client: painite trust --fingerprint SHA256:...
+
+ps-admin token create --name studio-mac      # prints the pnt_… secret once (stdout)
+
+sudo cp server/deploy/painite-server.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now painite-server
+curl --cacert /var/lib/painite/tls/ca.crt https://spark1:8443/v1/health
 ```
+
+`serve` uses `<data-dir>/tls/server.{crt,key}` automatically when they exist;
+`--insecure-http` forces plain HTTP. Re-running `admin init` keeps the CA (clients
+stay trusted) and reissues the server certificate; `--new-ca` replaces both.
+
+## Models
+
+PAINITE does not ship weights. Each model has a manifest (download URLs,
+SHA-256, license) in `painite_server/models/catalog/`, and the operator
+downloads the weights after accepting the license:
+
+```sh
+ps-admin models list
+ps-admin models pull denoise/nafnet-sidd@1.0.0 --accept-license
+ps-admin models verify
+sudo systemctl restart painite-server
+```
+
+Installed models live in `/var/lib/painite/models/<operation>/<name>@<version>/`,
+so several versions can be installed side by side and clients can pin one. A
+manifest marked `"default": true` becomes its operation's default; otherwise
+the first installed model does. `models pull --manifest file.json` installs a
+model that is not in the catalog.
 
 ## Settings
 

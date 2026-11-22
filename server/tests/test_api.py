@@ -23,6 +23,8 @@ def test_health_needs_no_auth(client):
 def test_auth_required_and_revocation(client, api):
     assert client.get("/v1/capabilities").json()["error"]["code"] == "unauthorized"
     assert client.get("/v1/capabilities", headers={"Authorization": "Bearer nope"}).status_code == 401
+    r = client.get("/v1/capabilities", headers={"Authorization": "Bearer tok_01abc"})
+    assert r.status_code == 401 and "pnt_" in r.json()["error"]["message"]
     r = client.get("/v1/capabilities", headers=api.h)
     assert r.status_code == 200
     caps = r.json()
