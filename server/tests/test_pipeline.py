@@ -67,6 +67,36 @@ def test_chained_preview_equals_export_crop(tmp_path):
         assert np.array_equal(p, crop), region
 
 
+@dataclass
+class ShapeRecorder(Model):
+    """Identity that records the window shape of every call."""
+
+    receptive_padding: int = 4
+    shapes: list = None
+
+    def run(self, tile: np.ndarray) -> np.ndarray:
+        self.shapes.append(tile.shape[:2])
+        return tile
+
+
+def test_edge_tiles_get_full_size_windows(tmp_path):
+    """A short remainder tile at the right/bottom edge is fed a full tile + 2*pad
+    window, taking more context from inside the image (window-size-sensitive
+    models like Stripformer lost 0.8 dB on narrow edge windows), and previews
+    still match exports."""
+    src = make_image(tmp_path / "in.tif", 150, 110, fmt="tiff")
+    rec = ShapeRecorder(id="unblur_motion/rec@1", operation="unblur_motion", version="1", shapes=[])
+    kw = dict(steps=[pipeline.Step(rec, {"strength": 1.0})], output={"format": "tiff"}, work_dir=tmp_path,
+              results_dir=tmp_path, tile=32, overlap=4, max_output_pixels=10**9,
+              on_progress=lambda p: None, is_canceled=lambda: False)
+    pipeline.run(src, region=None, job_id="full", **kw)
+    assert set(rec.shapes) == {(40, 40)}  # 32 + 2*4 everywhere, incl. the 22 px and 14 px remainders
+    for region in (Rect(140, 100, 10, 10), Rect(0, 96, 150, 14)):
+        rec.shapes.clear()
+        pipeline.run(src, region=region, job_id=f"p{region.x}{region.y}", **kw)
+        assert set(rec.shapes) == {(40, 40)}, region
+
+
 def test_pipeline_job_over_api(api, images):
     data = images["jpeg"]
     api.upload(data)
@@ -127,3 +157,16 @@ def test_pipeline_validation(api, images, extra, code):
     r = api.create({"source_id": "sha256:" + sha(data), "kind": "full"} | extra, key=f"bad-{len(str(extra))}-{code}")
     assert r.status_code in (400, 422), r.text
     assert r.json()["error"]["code"] in (code, "bad_request"), r.text
+
+
+@pytest.mark.parametrize("scale", [1, 2])
+def test_blend_weights_sum_to_one(scale):
+    """Tiles cross-fade over `band` px each side of a shared edge; the weights of
+    all tiles on an axis add up to exactly 1 everywhere."""
+    size, tile, band = 150, 32, 4
+    total = np.zeros(size * scale, dtype=np.float32)
+    for t in range(0, size, tile):
+        lo, hi, w = pipeline._blend_span(t, min(tile, size - t), size, band, 0, size, scale)
+        assert (w > 0).all() and (w <= 1).all()
+        total[lo:hi] += w
+    np.testing.assert_allclose(total, 1, atol=1e-6)

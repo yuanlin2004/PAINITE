@@ -152,14 +152,19 @@ def run(
         st = steps[k - 1]
         sc = st.model.scale
         in_w, in_h = sizes[k - 1]
-        # Input pixels whose tiles produce `need`, grown to whole tiles of this step's grid.
-        ix0, iy0 = need.x // sc, need.y // sc
-        ix1, iy1 = -(-(need.x + need.w) // sc), -(-(need.y + need.h) // sc)
+        # Input pixels whose tiles produce `need`, grown by the blend band (a pixel
+        # near a tile edge also needs the neighbouring tile) and then to whole
+        # tiles of this step's grid. Pixels within `band` of the area's inner
+        # edges are only partly blended, but they are never inside `need`.
+        band = overlap // 2
+        ix0, iy0 = max(need.x // sc - band, 0), max(need.y // sc - band, 0)
+        ix1 = min(-(-(need.x + need.w) // sc) + band, in_w)
+        iy1 = min(-(-(need.y + need.h) // sc) + band, in_h)
         area = _snap(Rect(ix0, iy0, ix1 - ix0, iy1 - iy0), tile, in_w, in_h)
         pad = max(overlap, st.model.receptive_padding)
-        want = Rect(max(area.x - pad, 0), max(area.y - pad, 0), 0, 0)
-        want = Rect(want.x, want.y, min(area.x + area.w + pad, in_w) - want.x,
-                    min(area.y + area.h + pad, in_h) - want.y)
+        wx0, wx1 = _span(area.x, area.w, in_w, tile, pad)
+        wy0, wy1 = _span(area.y, area.h, in_h, tile, pad)
+        want = Rect(wx0, wy0, wx1 - wx0, wy1 - wy0)
         inp, got = render(k - 1, want)
         window = inp[want.y - got.y:want.y - got.y + want.h, want.x - got.x:want.x - got.x + want.w]
         local = Rect(area.x - want.x, area.y - want.y, area.w, area.h)
@@ -168,8 +173,8 @@ def run(
         def step_progress(p: float) -> None:
             on_progress((k - 1 + p) / n)
 
-        out = _process_tiles(window, local, (want.x, want.y), st.model, st.params, tile, pad,
-                             step_progress, is_canceled)
+        out = _process_tiles(window, local, (want.x, want.y), (in_w, in_h), st.model, st.params, tile, pad,
+                             band, step_progress, is_canceled)
         timings["inference"] += (time.perf_counter() - t1) * 1000
         return out, Rect(area.x * sc, area.y * sc, area.w * sc, area.h * sc)
 
@@ -197,6 +202,29 @@ def run(
     )
 
 
+def _window(t: int, core: int, size: int, tile: int, pad: int) -> tuple[int, int]:
+    """Model input span [lo, hi) in full-image coordinates for the tile whose
+    core is [t, t + core) on an axis of length `size`. Every window is
+    tile + 2*pad long where the image allows: a tile at the far edge (often a
+    short remainder) gets its missing context from further inside the image
+    instead of a narrower window. Attention models (Stripformer) change their
+    output with window size, and a narrow edge window cost 0.8 dB on
+    RealBlur-J (bench/UNBLUR.md). A function of full-image coordinates only,
+    so previews and exports see the same windows."""
+    length = tile + 2 * pad
+    lo = max(min(t - pad, size - length), 0)
+    return lo, min(max(lo + length, t + core + pad), size)
+
+
+def _span(start: int, length: int, size: int, tile: int, pad: int) -> tuple[int, int]:
+    """Input span covering the windows of every tile in [start, start + length)."""
+    end = start + length
+    lo, _ = _window(start, min(tile, end - start), size, tile, pad)
+    last = start + ((length - 1) // tile) * tile
+    lo_last, hi = _window(last, end - last, size, tile, pad)
+    return min(lo, lo_last), hi
+
+
 def _snap(r: Rect, tile: int, width: int, height: int) -> Rect:
     x0 = (r.x // tile) * tile
     y0 = (r.y // tile) * tile
@@ -209,22 +237,33 @@ def _process_tiles(
     pixels: np.ndarray,
     area: Rect,
     origin: tuple[int, int],
+    full_size: tuple[int, int],
     model: Model,
     params: dict,
     tile: int,
     pad: int,
+    band: int,
     on_progress: Callable[[float], None],
     is_canceled: Callable[[], bool],
 ) -> np.ndarray:
     """Run the model tile by tile over `area` (already snapped to the tile grid
     for previews). Each tile is fed with `overlap` pixels of real context from
-    the full image on every side and only its core is kept, so a tile's output
-    is identical whether it is rendered for a preview or for a full export."""
-    height, width = pixels.shape[:2]
+    the full image on every side (see `_window`) and only its core is kept, so a
+    tile's output is identical whether it is rendered for a preview or for a full
+    export. `pixels` must cover every tile's window (see `_span`).
+
+    Neighbouring tiles cross-fade linearly over `band` px on each side of their
+    shared edge (weights sum to 1), so models whose output depends on the window
+    (Stripformer: seams 2.7x the neighbouring pixel steps without it) leave no
+    seams. Tiles are accumulated in a fixed order, so a pixel gets bit-identical
+    values in a preview and an export as long as all its tiles are in `area`."""
     s = model.scale
     strength = params.get("strength")
-    out = np.empty((area.h * s, area.w * s, pixels.shape[2]), dtype=np.float32)
+    out = np.zeros((area.h * s, area.w * s, pixels.shape[2]), dtype=np.float32)
+    wsum = np.zeros((area.h * s, area.w * s, 1), dtype=np.float32)
     ox0, oy0 = origin
+    if band > pad:
+        raise ValueError("blend band must not exceed the tile context")
     # Tile starts in window coordinates, aligned to multiples of `tile` in full-image coordinates.
     ys = range(area.y, area.y + area.h, tile)
     xs = range(area.x, area.x + area.w, tile)
@@ -237,20 +276,48 @@ def _process_tiles(
             if is_canceled():
                 raise Canceled()
             th, tw = min(tile, area.y + area.h - ty), min(tile, area.x + area.w - tx)
-            y0, x0 = max(ty - pad, 0), max(tx - pad, 0)
-            y1, x1 = min(ty + th + pad, height), min(tx + tw + pad, width)
+            # window in full-image coordinates, then in `pixels` coordinates
+            y0, y1 = (v - oy0 for v in _window(ty + oy0, th, full_size[1], tile, pad))
+            x0, x1 = (v - ox0 for v in _window(tx + ox0, tw, full_size[0], tile, pad))
+            if y0 < 0 or x0 < 0 or y1 > pixels.shape[0] or x1 > pixels.shape[1]:
+                raise ValueError("pixels do not cover the tile window")
             window = pixels[y0:y1, x0:x1]
             enhanced = model.run(window)
             if strength is not None and s == 1:
                 # DESIGN.md 5.4: out = input + strength * (model(input) - input)
                 enhanced = window + float(strength) * (enhanced - window)
-            cy, cx = (ty - y0) * s, (tx - x0) * s
-            core = enhanced[cy:cy + th * s, cx:cx + tw * s]
-            oy, ox = (ty - area.y) * s, (tx - area.x) * s
-            out[oy:oy + th * s, ox:ox + tw * s] = core
+            # the tile's core grown by `band` (not past the image or the area),
+            # with linear ramps across each shared edge; output coordinates
+            ry0, ry1, wy = _blend_span(ty + oy0, th, full_size[1], band, area.y + oy0, area.h, s)
+            rx0, rx1, wx = _blend_span(tx + ox0, tw, full_size[0], band, area.x + ox0, area.w, s)
+            wt = (wy[:, None] * wx[None, :])[:, :, None]
+            ey, ex = ry0 - (y0 + oy0) * s, rx0 - (x0 + ox0) * s  # into `enhanced`
+            oy, ox = ry0 - (area.y + oy0) * s, rx0 - (area.x + ox0) * s  # into `out`
+            hh, ww = ry1 - ry0, rx1 - rx0
+            out[oy:oy + hh, ox:ox + ww] += enhanced[ey:ey + hh, ex:ex + ww] * wt
+            wsum[oy:oy + hh, ox:ox + ww] += wt
             done += 1
             on_progress(done / total)
-    return out
+    return out / wsum
+
+
+def _blend_span(t: int, core: int, size: int, band: int, a0: int, alen: int, s: int):
+    """For the tile whose core is [t, t + core) (full-image input coordinates) on
+    an axis of length `size`: the output span [lo, hi) it contributes to, clipped
+    to the area [a0, a0 + alen), and its weights there. Weights ramp from 0 to 1
+    across [edge - band, edge + band) at every edge that is not an image edge, so
+    two neighbours' weights sum to 1."""
+    c0, c1, b = t * s, (t + core) * s, band * s
+    lo = c0 if t == 0 else c0 - b
+    hi = c1 if t + core == size else c1 + b
+    lo, hi = max(lo, a0 * s), min(hi, (a0 + alen) * s)
+    x = np.arange(lo, hi, dtype=np.float32) + 0.5
+    w = np.ones(hi - lo, dtype=np.float32)
+    if b and t > 0:
+        w = np.minimum(w, np.clip((x - (c0 - b)) / (2 * b), 0, 1))
+    if b and t + core < size:
+        w = np.minimum(w, np.clip(((c1 + b) - x) / (2 * b), 0, 1))
+    return lo, hi, w
 
 
 def _encode(
