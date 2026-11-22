@@ -1,0 +1,40 @@
+{
+  "id": "unblur_focus/lakdnet-defocus-lfdpdd-s@1.0.0",
+  "adapter": "torch_arch",
+  "scale": 1,
+  "description": "LaKDNet-S trained on LFDOF + DPDD (real defocus); unblur bake-off pick for missed focus",
+  "license": {
+    "name": "AGPL-3.0",
+    "url": "https://github.com/lingyanruan/LaKDNet/blob/main/LICENSE"
+  },
+  "files": [
+    {
+      "name": "lakdnet_defocus_lfdpdd_s.pth",
+      "url": "https://lakdnet.mpi-inf.mpg.de/Weights/Defocus/train_on_lfdpdd_s/train_on_lfdpdd_s.pth",
+      "sha256": "0f85ce4f4796e5c669b177fead47fa24fe777c3d855e9025f013a950f94ba26a"
+    }
+  ],
+  "config": {
+    "arch": "lakdnet",
+    "weights": "lakdnet_defocus_lfdpdd_s.pth",
+    "dtype": "fp16",
+    "context": 64,
+    "pad_multiple": 8,
+    "arch_kwargs": {
+      "dim": 32,
+      "num_blocks": [
+        8,
+        12,
+        12,
+        16
+      ],
+      "mix_kernel_size": [
+        9,
+        9,
+        9,
+        9
+      ]
+    }
+  },
+  "default": true
+}

@@ -163,8 +163,8 @@ struct DocumentView: View {
 
     private var addStepMenu: some View {
         Menu {
-            ForEach(PainiteKit.Operation.allCases) { op in
-                Button(op.title) { model.addStep(op) }
+            ForEach(PainiteKit.Operation.addable) { op in
+                Button(op.stepTitle) { model.addStep(op) }
                     .disabled(!model.canAdd(op))
             }
         } label: {
@@ -306,7 +306,7 @@ struct StepCard: View {
                     .frame(width: 18, height: 18)
                     .background(Circle().fill(step.enabled ? Color.accentColor.opacity(0.25) : Color.secondary.opacity(0.15)))
                 Toggle(isOn: binding.enabled) {
-                    Text(step.operation.title).font(.callout.weight(.semibold))
+                    Text(step.operation.stepTitle).font(.callout.weight(.semibold))
                 }
                 .toggleStyle(.checkbox)
                 .help(step.enabled ? "Turn this step off without removing it" : "Turn this step on")
@@ -319,6 +319,18 @@ struct StepCard: View {
                     .help("Remove step")
             }
             .buttonStyle(.borderless)
+
+            if step.operation.isUnblur {
+                Picker("Blur", selection: binding.operation) {
+                    Text("Motion").tag(PainiteKit.Operation.unblurMotion)
+                    Text("Focus").tag(PainiteKit.Operation.unblurFocus)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .controlSize(.small)
+                .disabled(!step.enabled)
+                .help("Motion fixes camera shake and moving subjects. Focus fixes a photo that is out of focus.")
+            }
 
             if model.takesStrength(step.operation) {
                 HStack {

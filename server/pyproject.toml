@@ -17,7 +17,7 @@ dependencies = [
 
 [project.optional-dependencies]
 # Real models. torch and torchvision come from the NGC base image (or your own CUDA build).
-models = ["spandrel==0.4.2"]
+models = ["spandrel==0.4.2", "einops>=0.7"]
 test = ["pytest>=8", "httpx>=0.27", "pillow>=10"]
 
 [project.scripts]
@@ -27,7 +27,7 @@ painite-server = "painite_server.__main__:main"
 include = ["painite_server*"]
 
 [tool.setuptools.package-data]
-painite_server = ["models/catalog/*"]
+painite_server = ["models/catalog/*", "models/arches/LICENSE-*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

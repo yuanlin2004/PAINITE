@@ -283,7 +283,7 @@ components:
 
     Operation:
       type: string
-      enum: [denoise, sharpen, unblur, upscale2x]
+      enum: [denoise, sharpen, unblur_motion, unblur_focus, upscale2x]
 
     OutputFormat:
       type: string

@@ -4,7 +4,13 @@
 import Foundation
 
 public enum Operation: String, Codable, CaseIterable, Sendable, Identifiable {
-    case denoise, sharpen, unblur, upscale2x
+    case denoise, sharpen
+    /// Unblur comes in two kinds, each with its own model: camera shake or
+    /// motion blur, and missed focus. The app shows them as one "Unblur" step
+    /// with a Motion / Focus switch.
+    case unblurMotion = "unblur_motion"
+    case unblurFocus = "unblur_focus"
+    case upscale2x
 
     public var id: String { rawValue }
 
@@ -12,10 +18,19 @@ public enum Operation: String, Codable, CaseIterable, Sendable, Identifiable {
         switch self {
         case .denoise: "Denoise"
         case .sharpen: "Sharpen"
-        case .unblur: "Unblur"
+        case .unblurMotion: "Unblur Motion"
+        case .unblurFocus: "Unblur Focus"
         case .upscale2x: "Upscale 2×"
         }
     }
+
+    /// The step's name in the sidebar and the Add Step menu.
+    public var stepTitle: String { isUnblur ? "Unblur" : title }
+
+    public var isUnblur: Bool { self == .unblurMotion || self == .unblurFocus }
+
+    /// What the Add Step menu offers. Unblur is added as Motion and switched on the step.
+    public static let addable: [Operation] = [.denoise, .sharpen, .unblurMotion, .upscale2x]
 
     /// Output pixels per input pixel along each axis.
     public var scale: Int { self == .upscale2x ? 2 : 1 }

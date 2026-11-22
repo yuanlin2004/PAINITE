@@ -92,7 +92,10 @@ class Registry:
 OPERATION_PARAMS = {
     "denoise": {"strength": {"min": 0.0, "max": 1.0, "default": 0.5}},
     "sharpen": {"strength": {"min": 0.0, "max": 1.0, "default": 0.5}},
-    "unblur": {"strength": {"min": 0.0, "max": 1.0, "default": 1.0}},
+    # Unblur comes in two kinds, each its own operation and model (bench/UNBLUR.md):
+    # camera shake / motion blur, and missed focus.
+    "unblur_motion": {"strength": {"min": 0.0, "max": 1.0, "default": 1.0}},
+    "unblur_focus": {"strength": {"min": 0.0, "max": 1.0, "default": 1.0}},
     "upscale2x": {},
 }
 
@@ -104,11 +107,18 @@ ADAPTERS: dict[str, Adapter] = {
     "identity": lambda m, d: IdentityModel(id=m.id, operation=m.operation, version=m.version, placeholder=True),
     "bilinear2x": lambda m, d: BilinearUpscale2x(id=m.id, operation=m.operation, version=m.version, placeholder=True),
     "spandrel": lambda m, d: _spandrel(m, d),
+    "torch_arch": lambda m, d: _torch_arch(m, d),
 }
 
 
 def _spandrel(m: "Manifest", d: Path) -> Model:
     from .spandrel_adapter import make  # noqa: PLC0415 - imports torch lazily
+
+    return make(m, d)
+
+
+def _torch_arch(m: "Manifest", d: Path) -> Model:
+    from .arch_adapter import make  # noqa: PLC0415 - imports torch lazily
 
     return make(m, d)
 
@@ -120,7 +130,8 @@ def default_registry(data_dir: Path | None = None) -> Registry:
     reg = Registry()
     reg.add(IdentityModel(id="denoise/identity@0.1.0", operation="denoise", version="0.1.0", placeholder=True))
     reg.add(IdentityModel(id="sharpen/identity@0.1.0", operation="sharpen", version="0.1.0", placeholder=True))
-    reg.add(IdentityModel(id="unblur/identity@0.1.0", operation="unblur", version="0.1.0", placeholder=True))
+    for op in ("unblur_motion", "unblur_focus"):
+        reg.add(IdentityModel(id=f"{op}/identity@0.1.0", operation=op, version="0.1.0", placeholder=True))
     reg.add(BilinearUpscale2x(id="upscale2x/bilinear@0.1.0", operation="upscale2x", version="0.1.0",
                               placeholder=True))
     if data_dir is None:

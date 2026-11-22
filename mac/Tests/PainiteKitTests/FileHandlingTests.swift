@@ -158,6 +158,19 @@ final class RecipeTests: XCTestCase {
         XCTAssertFalse(Recipe.canAdd(.sharpen, to: steps))
     }
 
+    func testUnblurKindsAreSeparateOperations() throws {
+        XCTAssertEqual(PainiteKit.Operation.unblurMotion.rawValue, "unblur_motion")
+        XCTAssertEqual(PainiteKit.Operation.unblurFocus.rawValue, "unblur_focus")
+        XCTAssertEqual(PainiteKit.Operation.unblurFocus.stepTitle, "Unblur")
+        XCTAssertFalse(PainiteKit.Operation.addable.contains(.unblurFocus))
+        let sig = Recipe.signature([RecipeStep(operation: .unblurFocus, strength: 1)]) { _ in true }
+        XCTAssertEqual(Recipe.label(sig), "Unblur Focus 100")
+        let req = JobRequest(sourceId: "sha256:x", kind: .full, steps: Recipe.jobSteps(sig, models: []),
+                             region: nil, format: nil)
+        let obj = try JSONSerialization.jsonObject(with: APIClient.encoder.encode(req)) as! [String: Any]
+        XCTAssertEqual(obj["operation"] as? String, "unblur_focus")
+    }
+
     func testOneStepIsSentAsPlainOperation() throws {
         let sig = Recipe.signature([RecipeStep(operation: .sharpen, strength: 0.3)]) { _ in true }
         let one = JobRequest(sourceId: "sha256:x", kind: .full, steps: Recipe.jobSteps(sig, models: ["m"]),

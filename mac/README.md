@@ -42,7 +42,7 @@ permission the first time the app connects.
 
 | Area | Behavior |
 | --- | --- |
-| Steps | The sidebar holds up to 4 steps (Denoise, Sharpen, Unblur, Upscale 2×) that run top to bottom as one server job. Toggle, reorder, or remove each step; Upscale can appear once and is added last. |
+| Steps | The sidebar holds up to 4 steps (Denoise, Sharpen, Unblur, Upscale 2×) that run top to bottom as one server job. Unblur has a Motion / Focus switch: Motion for camera shake and moving subjects, Focus for a missed focus. Toggle, reorder, or remove each step; Upscale can appear once and is added last. |
 | Open | Finder, File › Open, drag onto the welcome window, or Lightroom **Edit in**. JPEG and TIFF only, as the server supports. |
 | Upload | Starts as soon as the photo opens. Content-addressed by SHA-256: `HEAD /sources/{sha}` first, so a photo the server already has is not sent again. If the server dropped it, the app uploads again and retries the job. |
 | Preview area | A box you pick, at most 2048 px square (1024 with upscale), starting in the middle of the photo. Zooming and panning never change it. **Select Area** (⌘E) then drag to draw a new box, drag inside the box to move it, or click to center it there; Shift-drag does the same at any time; Esc cancels. **Preview Area in View** (⇧⌘E) picks what is on screen. A preview is rendered only when the area or the steps change. Lossless TIFF, so compression doesn't hide noise. The last six previews are cached. |

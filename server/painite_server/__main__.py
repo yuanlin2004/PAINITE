@@ -145,7 +145,8 @@ def _models(args, settings: Settings) -> int:
     if args.mcmd == "list":
         inst = {m.id: d for m, d in mf.installed(settings.data_dir)}
         cat = mf.catalog()
-        print("Built-in placeholders: denoise/identity@0.1.0, sharpen/identity@0.1.0, unblur/identity@0.1.0, upscale2x/bilinear@0.1.0")
+        print("Built-in placeholders: denoise/identity@0.1.0, sharpen/identity@0.1.0, unblur_motion/identity@0.1.0,")
+        print("  unblur_focus/identity@0.1.0, upscale2x/bilinear@0.1.0")
         for mid in sorted(set(cat) | set(inst)):
             m = cat.get(mid) or mf.Manifest.load(inst[mid] / mf.MANIFEST)
             state = "installed" if mid in inst else "available"

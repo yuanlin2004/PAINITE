@@ -7,9 +7,13 @@ The PAINITE inference server (FastAPI). It implements the contract in
 **Models:** the catalog has the M0 bake-off picks ([bench/BAKEOFF.md](../bench/BAKEOFF.md)):
 `denoise/scunet-real-gan`, `sharpen/realesrgan-x2-down` (Real-ESRGAN 2x, then
 area downscale) and `upscale2x/nomosuni-esrgan-multijpg`, each followed by a
-low-frequency color anchor. Install them with `models pull --all --accept-license`.
+low-frequency color anchor. Unblur ([bench/UNBLUR.md](../bench/UNBLUR.md)) has
+two operations: `unblur_motion/stripformer-realblurj` for camera shake and
+`unblur_focus/lakdnet-defocus-lfdpdd-s` for missed focus. They run through the
+`torch_arch` adapter with network code vendored in
+`painite_server/models/arches/` (Stripformer: non-commercial license; LaKDNet: AGPL-3.0). Install them with `models pull --all --accept-license`.
 Until they are installed, placeholder models (`denoise/identity`,
-`sharpen/identity`, `unblur/identity`, `upscale2x/bilinear`) answer instead.
+`sharpen/identity`, `unblur_motion/identity`, `unblur_focus/identity`, `upscale2x/bilinear`) answer instead.
 
 ## Run locally
 

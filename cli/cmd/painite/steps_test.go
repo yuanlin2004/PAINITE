@@ -17,13 +17,13 @@ func TestParseSteps(t *testing.T) {
 		t.Fatalf("got %+v, %v", one, err)
 	}
 	for _, bad := range []string{"", "blur", "upscale2x:0.5", "denoise:2", "denoise:x", "upscale2x,upscale2x",
-		"denoise,denoise,denoise,denoise,denoise"} {
+		"denoise,denoise,denoise,denoise,denoise", "unblur"} {
 		if _, err := parseSteps(bad, nil); err == nil {
 			t.Errorf("%q: expected an error", bad)
 		}
 	}
-	ub, err := parseSteps("unblur:0.8,denoise", nil)
-	if err != nil || len(ub) != 2 || ub[0].Operation != "unblur" || *ub[0].Strength != 0.8 {
+	ub, err := parseSteps("unblur_motion:0.8,unblur_focus", nil)
+	if err != nil || len(ub) != 2 || ub[0].Operation != "unblur_motion" || *ub[0].Strength != 0.8 {
 		t.Fatalf("got %+v, %v", ub, err)
 	}
 	if _, err := parseSteps("upscale2x", &half); err == nil {
