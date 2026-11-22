@@ -180,3 +180,10 @@ final class RecipeTests: XCTestCase {
         XCTAssertNil(steps[1]["params"])
     }
 }
+
+final class OldServerErrorTests: XCTestCase {
+    func testPipelineRejectedByOldServerExplainsWhy() {
+        let e = APIError(status: 400, code: "bad_request", message: "operation: Field required")
+        XCTAssertTrue(e.localizedDescription.contains("several steps"))
+    }
+}

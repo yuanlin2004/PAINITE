@@ -271,6 +271,9 @@ public struct APIError: Error, Sendable, Equatable, LocalizedError {
         case "processing_failed": return "The server could not process this image. (\(message))"
         case "digest_mismatch": return "The upload was corrupted in transit. Try again."
         case "canceled": return "Canceled."
+        case "bad_request" where message.hasPrefix("operation: Field required"):
+            // A server from before pipelines rejects `steps` this way.
+            return "This server doesn't support several steps in one job yet. Update the PAINITE server, or use one step."
         default: return message.isEmpty ? "Something went wrong (\(code))." : message
         }
     }
