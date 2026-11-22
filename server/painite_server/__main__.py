@@ -47,6 +47,7 @@ def _parser() -> argparse.ArgumentParser:
     msub.add_parser("list", help="catalog and installed models")
     mp = msub.add_parser("pull", help="download a model's weights after accepting its license")
     mp.add_argument("model", nargs="?", help="model ID from the catalog")
+    mp.add_argument("--all", action="store_true", help="pull every catalog model")
     mp.add_argument("--manifest", help="install from this manifest file instead of the catalog")
     mp.add_argument("--accept-license", action="store_true", help="accept the model's license non-interactively")
     mr = msub.add_parser("remove")
@@ -158,45 +159,51 @@ def _models(args, settings: Settings) -> int:
     if args.mcmd == "pull":
         try:
             if args.manifest:
-                m = mf.Manifest.load(Path(args.manifest))
+                todo = [mf.Manifest.load(Path(args.manifest))]
+            elif args.all:
+                todo = list(mf.catalog().values())
             elif args.model:
                 cat = mf.catalog()
                 if args.model not in cat:
                     print(f"error: {args.model} is not in the catalog; see `painite-server models list`",
                           file=sys.stderr)
                     return 1
-                m = cat[args.model]
+                todo = [cat[args.model]]
             else:
-                print("error: give a model ID or --manifest", file=sys.stderr)
+                print("error: give a model ID, --all, or --manifest", file=sys.stderr)
                 return 2
         except mf.ManifestError as e:
             print(f"error: {e}", file=sys.stderr)
             return 1
-        if m.adapter not in ADAPTERS:
-            print(f"error: {m.id} needs adapter {m.adapter!r}, which this server version does not have",
+        for m in todo:
+            if m.adapter not in ADAPTERS:
+                print(f"error: {m.id} needs adapter {m.adapter!r}, which this server version does not have",
+                      file=sys.stderr)
+                return 1
+        for m in todo:
+            lic = m.license
+            print(f"{m.id} is licensed under {lic.get('name')}" + (f": {lic['url']}" if lic.get("url") else ""),
+                  file=sys.stderr)
+        if not args.accept_license:
+            print("Read the license(s), then rerun with --accept-license to download the weights.",
                   file=sys.stderr)
             return 1
-        lic = m.license
-        print(f"{m.id} is licensed under {lic.get('name')}" + (f": {lic['url']}" if lic.get("url") else ""),
-              file=sys.stderr)
-        if not args.accept_license:
-            print("Read the license, then rerun with --accept-license to download the weights.", file=sys.stderr)
-            return 1
-        total = sum(f.bytes or 0 for f in m.files)
-        print(f"Downloading {len(m.files)} file(s){f', {total / 1e6:.0f} MB' if total else ''}…", file=sys.stderr)
-        last = [0]
+        for m in todo:
+            print(f"Downloading {m.id}…", file=sys.stderr)
+            last = [-1]
 
-        def progress(name: str, done: int, size: int | None) -> None:
-            if size and done * 10 // size != last[0]:
-                last[0] = done * 10 // size
-                print(f"  {name}: {done * 100 // size}%", file=sys.stderr)
+            def progress(name: str, done: int, size: int | None) -> None:
+                if size and done * 10 // size != last[0]:
+                    last[0] = done * 10 // size
+                    print(f"  {name}: {done * 100 // size}%", file=sys.stderr)
 
-        try:
-            d = mf.pull(m, settings.data_dir, progress)
-        except (mf.ManifestError, OSError) as e:
-            print(f"error: {e}", file=sys.stderr)
-            return 1
-        print(f"Installed {m.id} in {d}. Restart the server to load it.", file=sys.stderr)
+            try:
+                d = mf.pull(m, settings.data_dir, progress)
+            except (mf.ManifestError, OSError) as e:
+                print(f"error: {m.id}: {e}", file=sys.stderr)
+                return 1
+            print(f"Installed {m.id} in {d}.", file=sys.stderr)
+        print("Restart the server to load new models.", file=sys.stderr)
         return 0
 
     if args.mcmd == "remove":

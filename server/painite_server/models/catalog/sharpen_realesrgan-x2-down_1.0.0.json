@@ -1,0 +1,34 @@
+{
+  "id": "sharpen/realesrgan-x2-down@1.0.0",
+  "adapter": "spandrel",
+  "scale": 1,
+  "description": "Real-ESRGAN x2plus, then area downscale 2x (bake-off pick)",
+  "license": {
+    "name": "BSD-3-Clause",
+    "url": "https://github.com/xinntao/Real-ESRGAN/blob/master/LICENSE"
+  },
+  "files": [
+    {
+      "name": "RealESRGAN_x2plus.pth",
+      "url": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.1/RealESRGAN_x2plus.pth",
+      "sha256": "49fafd45f8fd7aa8d31ab2a22d14d91b536c34494a5cfe31eb5d89c2fa266abb"
+    }
+  ],
+  "config": {
+    "weights": "RealESRGAN_x2plus.pth",
+    "model_scale": 2,
+    "dtype": "fp16",
+    "context": 64,
+    "postprocess": [
+      {
+        "type": "area_downscale",
+        "factor": 2
+      },
+      {
+        "type": "color_anchor",
+        "sigma": 4
+      }
+    ]
+  },
+  "default": true
+}

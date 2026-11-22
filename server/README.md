@@ -4,14 +4,18 @@ The PAINITE inference server (FastAPI). It implements the contract in
 [`api/openapi.yaml`](../api/openapi.yaml); the design is in
 [`docs/DESIGN.md`](../docs/DESIGN.md).
 
-**Status:** only placeholder models are built in: `denoise/identity`,
-`sharpen/identity` (both return the input), and `upscale2x/bilinear`. Real
-models are installed with `models pull` once the bake-off adds their manifests
-and adapters.
+**Models:** the catalog has the M0 bake-off picks ([bench/BAKEOFF.md](../bench/BAKEOFF.md)):
+`denoise/scunet-real-gan`, `sharpen/realesrgan-x2-down` (Real-ESRGAN 2x, then
+area downscale) and `upscale2x/nomosuni-esrgan-multijpg`, each followed by a
+low-frequency color anchor. Install them with `models pull --all --accept-license`.
+Until they are installed, placeholder models (`denoise/identity`,
+`sharpen/identity`, `upscale2x/bilinear`) answer instead.
 
 ## Run locally
 
 Needs Python 3.11+ and libvips (`apt install libvips42`, `brew install vips`).
+Real models also need PyTorch with torchvision and `pip install -e '.[models]'`;
+without CUDA they run on the CPU, slowly.
 
 ```sh
 cd server
@@ -52,7 +56,7 @@ downloads the weights after accepting the license:
 
 ```sh
 ps-admin models list
-ps-admin models pull denoise/nafnet-sidd@1.0.0 --accept-license
+ps-admin models pull --all --accept-license      # or one ID, e.g. denoise/scunet-real-gan@1.0.0
 ps-admin models verify
 sudo systemctl restart painite-server
 ```
@@ -77,7 +81,7 @@ Environment variables (defaults in `painite_server/config.py`):
 | `PAINITE_RESULT_RETENTION_S` | 86400 |
 | `PAINITE_SOURCE_IDLE_S` | 900 (sources with no active job are deleted after this idle time) |
 | `PAINITE_DISK_CAP_BYTES` | 200 GiB |
-| `PAINITE_TILE_SIZE` / `PAINITE_TILE_OVERLAP` | 512 / 32 |
+| `PAINITE_TILE_SIZE` / `PAINITE_TILE_OVERLAP` | 512 / 64 (a model may ask for more context) |
 
 ## Tests
 

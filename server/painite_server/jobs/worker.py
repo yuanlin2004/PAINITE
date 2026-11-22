@@ -34,6 +34,7 @@ class Worker:
     def start(self) -> None:
         self._threads = [
             threading.Thread(target=self._run, name="painite-gpu-worker", daemon=True),
+            threading.Thread(target=self._warm, name="painite-warmup", daemon=True),
             threading.Thread(target=self._sweep_loop, name="painite-sweeper", daemon=True),
         ]
         for t in self._threads:
@@ -47,6 +48,18 @@ class Worker:
 
     def notify(self) -> None:
         self._wake.set()
+
+    def _warm(self) -> None:
+        """Load the default models at startup so the first job is not a cold start."""
+        for model_id in self.registry.defaults.values():
+            model = self.registry.get(model_id)
+            load = getattr(model, "load", None)
+            if load is None or self._stop.is_set():
+                continue
+            try:
+                load()
+            except Exception:  # noqa: BLE001 - the job will report the failure
+                log.exception("could not load %s", model_id)
 
     # Worker -----------------------------------------------------------------
 

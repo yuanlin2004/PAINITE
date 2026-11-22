@@ -102,7 +102,14 @@ Adapter = Callable[["Manifest", Path], Model]
 ADAPTERS: dict[str, Adapter] = {
     "identity": lambda m, d: IdentityModel(id=m.id, operation=m.operation, version=m.version, placeholder=True),
     "bilinear2x": lambda m, d: BilinearUpscale2x(id=m.id, operation=m.operation, version=m.version, placeholder=True),
+    "spandrel": lambda m, d: _spandrel(m, d),
 }
+
+
+def _spandrel(m: "Manifest", d: Path) -> Model:
+    from .spandrel_adapter import make  # noqa: PLC0415 - imports torch lazily
+
+    return make(m, d)
 
 
 def default_registry(data_dir: Path | None = None) -> Registry:
