@@ -7,7 +7,9 @@ import argparse
 import hashlib
 import subprocess
 import urllib.request
+import zipfile
 
+from painite_bench import arches
 from painite_bench.config import WEIGHTS_DIR, candidates
 
 
@@ -23,7 +25,14 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--op")
     ap.add_argument("--models", nargs="*")
+    ap.add_argument("--src", action="store_true", help="also clone the pinned upstream arch repos (unblur)")
     a = ap.parse_args()
+    if a.src:
+        for name, (url, commit) in arches.REPOS.items():
+            d = arches.SRC / name
+            if not d.exists():
+                subprocess.run(["git", "clone", "-q", url, str(d)], check=True)
+            subprocess.run(["git", "-C", str(d), "checkout", "-q", commit], check=True)
     WEIGHTS_DIR.mkdir(parents=True, exist_ok=True)
     for c in candidates(a.op, a.models):
         if c.baseline:
@@ -33,14 +42,20 @@ def main():
                 print(f"{c.id:40s} missing: gdown --folder {c.url.removeprefix('gdrive-folder:')} -O {c.path.parent}")
                 continue
         elif not c.path.exists():
-            print(f"fetch {c.id} <- {c.url}")
-            c.path.parent.mkdir(parents=True, exist_ok=True)
+            print(f"fetch {c.id} <- {c.url or 'gdrive:' + c.gdrive}")
             tmp = c.path.with_suffix(".part")
-            if c.url.startswith("gdrive:"):
-                subprocess.run(["gdown", "-q", c.url.removeprefix("gdrive:"), "-O", str(tmp)], check=True)
+            c.path.parent.mkdir(parents=True, exist_ok=True)
+            gid = c.gdrive or (c.url.removeprefix("gdrive:") if c.url.startswith("gdrive:") else None)
+            if gid:
+                subprocess.run(["gdown", "-q", gid, "-O", str(tmp)], check=True)
             else:
                 urllib.request.urlretrieve(c.url, tmp)
-            tmp.rename(c.path)
+            if c.member:  # weights shipped inside a zip
+                with zipfile.ZipFile(tmp) as z, open(c.path, "wb") as f:
+                    f.write(z.read(c.member))
+                tmp.unlink()
+            else:
+                tmp.rename(c.path)
         got = sha256(c.path)
         status = "ok" if got == c.sha256 else f"MISMATCH (got {got})"
         print(f"{c.id:40s} {status}")

@@ -5,6 +5,7 @@ import spandrel_extra_arches
 import torch
 from torchvision.transforms.functional import gaussian_blur
 
+from . import arches
 from .config import Candidate
 
 spandrel_extra_arches.install()
@@ -21,15 +22,41 @@ class Runner:
             self.dtype = torch.float32
             self.model = None
             return
+        if cand.arch:
+            net, self.pad = arches.build(cand.arch, cand.path)
+            if dtype == "auto":
+                dtype = cand.dtype or "fp32"
+            self.dtype = {"fp16": torch.float16, "bf16": torch.bfloat16, "fp32": torch.float32}[dtype]
+            self.model = net.to(device).eval().to(self.dtype)
+            self.desc = self._padded
+            return
         d = spandrel.ModelLoader().load_from_file(str(cand.path))
         assert d.scale == cand.model_scale, (cand.id, d.scale)
+        if dtype == "auto" and cand.dtype:
+            dtype = cand.dtype
         if dtype == "auto":
             dtype = "fp16" if d.supports_half else "bf16" if d.supports_bfloat16 else "fp32"
         self.dtype = {"fp16": torch.float16, "bf16": torch.bfloat16, "fp32": torch.float32}[dtype]
+        if cand.tlc:
+            arches.tlc(d.model, cand.tlc)
         d.to(device).eval()
         d.model.to(self.dtype)
         self.desc = d
         self.model = d.model
+
+    def _padded(self, x: torch.Tensor) -> torch.Tensor:
+        """Reflect-pad to the arch's multiple (spandrel does this for its own archs)."""
+        h, w = x.shape[-2:]
+        ph, pw = -h % self.pad, -w % self.pad
+        if ph or pw:
+            x = torch.nn.functional.pad(x, (0, pw, 0, ph), mode="reflect")
+        ys = []
+        for xi in x.split(1):  # some upstream archs (EVSSM) only take batch 1
+            y = self.model(xi)
+            if isinstance(y, (list, tuple)):
+                y = y[0] if y[0].shape[-1] == xi.shape[-1] else y[-1]
+            ys.append(y)
+        return torch.cat(ys)[..., :h, :w]
 
     @property
     def dtype_name(self) -> str:

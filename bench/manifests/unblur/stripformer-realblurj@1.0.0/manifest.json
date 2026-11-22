@@ -1,0 +1,32 @@
+{
+  "id": "unblur/stripformer-realblurj@1.0.0",
+  "operation": "unblur",
+  "mode": "motion",
+  "version": "1.0.0",
+  "architecture": "Stripformer (not in spandrel; vendor models/Stripformer.py from upstream commit 9efba889fe2da349714fece642541129b9c313a4)",
+  "scale": 1,
+  "dtype": "fp16",
+  "weights": {
+    "file": "stripformer_RealBlur_J.pth",
+    "url": "https://drive.google.com/uc?id=14IiYBFyNTb15FoGQgIkhJqIx62F-_2t-",
+    "sha256": "039afcc6d99ae6eae7c9c4894635d82a055e5ec00bdd6462e80e7dfc4b0875f3",
+    "note": "Google Drive only upstream; mirror the file to our own store, the sha256 is the contract"
+  },
+  "upstream": "https://github.com/pp00704831/Stripformer-ECCV-2022-",
+  "trained_on": "RealBlur-J (real camera shake)",
+  "license": "MIT-style, non-commercial use only (upstream license file)",
+  "config": {
+    "constructor": "Stripformer()",
+    "input": "RGB float in [0,1]; the network takes x - 0.5 and returns y - 0.5 (add 0.5 back, clamp to [0,1])",
+    "pad_multiple": 8,
+    "pad_mode": "reflect"
+  },
+  "tiling": {
+    "tile": 512,
+    "overlap": 64,
+    "batch": 1
+  },
+  "postprocess": [],
+  "strength": "blend: out = input + strength * (model - input)",
+  "selected_by": "bench/UNBLUR.md (unblur bake-off, 2026-11-22)"
+}

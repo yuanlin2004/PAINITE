@@ -48,6 +48,8 @@ painite enhance --op denoise --strength 0.6 -o out/ IMG_001.jpg IMG_002.tif
 painite enhance --op face -o portraits/ *.jpg
 painite enhance --op upscale2x --json --overwrite -o big.tif small.tif
 painite enhance --op denoise:0.6,sharpen:0.3,upscale2x -o out/ IMG_001.tif   # pipeline
+painite enhance --op unblur_motion -o fixed.jpg shaky.jpg                    # camera shake, motion blur
+painite enhance --op unblur_focus -o fixed.jpg soft.jpg                      # missed focus
 ```
 
 - A comma-separated `--op` runs a pipeline: the steps run in order in one

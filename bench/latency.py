@@ -48,7 +48,7 @@ def sync_time(fn):
 
 
 def pick_batch(run, src):
-    x = src[:, :, :1504, :1504]  # 3x3 tiles
+    x = src[:, :, :3 * TILE - 2 * OVERLAP, :3 * TILE - 2 * OVERLAP]  # 3x3 tiles
     best = None
     for b in (1, 2, 4, 8):
         try:
@@ -69,16 +69,22 @@ def main():
     ap.add_argument("--dtype", default="auto")
     ap.add_argument("--sizes", nargs="*", type=int, default=[12, 24, 48])
     ap.add_argument("--preview-runs", type=int, default=10)
+    ap.add_argument("--tile", type=int, default=512)
+    ap.add_argument("--overlap", type=int, default=32)
+    ap.add_argument("--csv", default="latency.csv")
     a = ap.parse_args()
+    global TILE, OVERLAP
+    TILE, OVERLAP = a.tile, a.overlap
     base = imageio.read(TESTSET_DIR / "gt/foliage-0840.png")
-    path = RESULTS_DIR / "latency.csv"
+    path = RESULTS_DIR / a.csv
     rows = []
     if path.exists():
         with open(path) as f:
             rows = list(csv.DictReader(f))
     # "via" sharpen candidates cost the same as their 2x model plus a cheap pool
-    cands = [c for c in candidates(a.op, a.models) if not c.baseline and not c.via]
-    rows = [r for r in rows if r["model"] not in {c.id for c in cands} or r["dtype"] != a.dtype]
+    cands = [c for c in candidates(a.op, a.models) if not c.baseline and not c.via and not c.precomputed]
+    rows = [r for r in rows if r["model"] not in {c.id for c in cands} or r["dtype"] != a.dtype
+            or r.get("tile", str(TILE)) != str(TILE)]
     for c in cands:
         torch.cuda.empty_cache()
         t0 = time.perf_counter()
@@ -95,7 +101,7 @@ def main():
         times = [sync_time(lambda: run_tiled(run, pv, run.scale, TILE, OVERLAP, batch))[0]
                  for _ in range(runs)]
         q = statistics.quantiles(times, n=20) if len(times) >= 5 else [max(times)] * 19
-        row = dict(model=c.id, dtype=run.dtype_name, batch=batch, load_s=round(load_s, 2),
+        row = dict(model=c.id, dtype=run.dtype_name, tile=TILE, overlap=OVERLAP, batch=batch, load_s=round(load_s, 2),
                    preview_p50=round(statistics.median(times), 3), preview_p95=round(q[18], 3))
         print(f"== {c.id} {run.dtype_name} batch={batch} load={load_s:.1f}s "
               f"preview p50={row['preview_p50']}s p95={row['preview_p95']}s", flush=True)

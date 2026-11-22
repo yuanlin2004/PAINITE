@@ -125,7 +125,11 @@ final class DocumentModel: ObservableObject {
 
     // MARK: Steps
 
-    func canAdd(_ op: PainiteKit.Operation) -> Bool { Recipe.canAdd(op, to: steps) && !export.isRunning }
+    func canAdd(_ op: PainiteKit.Operation) -> Bool {
+        // An older server may not offer every operation (e.g. unblur).
+        let offered = server.capabilities.map { $0.operation(op) != nil } ?? true
+        return offered && Recipe.canAdd(op, to: steps) && !export.isRunning
+    }
 
     func addStep(_ op: PainiteKit.Operation) {
         guard canAdd(op) else { return }

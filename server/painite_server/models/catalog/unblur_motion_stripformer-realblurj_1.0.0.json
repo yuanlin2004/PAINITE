@@ -1,0 +1,25 @@
+{
+  "id": "unblur_motion/stripformer-realblurj@1.0.0",
+  "adapter": "torch_arch",
+  "scale": 1,
+  "description": "Stripformer trained on RealBlur-J (real camera shake); unblur bake-off pick for motion blur",
+  "license": {
+    "name": "Non-commercial MIT-style (Stripformer license)",
+    "url": "https://github.com/pp00704831/Stripformer-ECCV-2022-/blob/main/license"
+  },
+  "files": [
+    {
+      "name": "stripformer_RealBlur_J.pth",
+      "url": "https://drive.usercontent.google.com/download?id=14IiYBFyNTb15FoGQgIkhJqIx62F-_2t-&export=download&confirm=t",
+      "sha256": "039afcc6d99ae6eae7c9c4894635d82a055e5ec00bdd6462e80e7dfc4b0875f3"
+    }
+  ],
+  "config": {
+    "arch": "stripformer",
+    "weights": "stripformer_RealBlur_J.pth",
+    "dtype": "fp16",
+    "context": 64,
+    "pad_multiple": 8
+  },
+  "default": true
+}

@@ -23,6 +23,13 @@ class Candidate:
     baseline: str | None = None
     via: str | None = None  # sharpen by a 2x model's output area-downscaled back to 1x
     anchor: float = 0  # sigma (output px) of the low-frequency color/tone anchor, 0 = off
+    arch: str | None = None  # non-spandrel architecture, built by painite_bench.arches
+    dtype: str | None = None  # preferred dtype when --dtype auto (after the correctness check)
+    gdrive: str | None = None  # Google Drive file id when there is no direct URL
+    trained_on: str | None = None
+    member: str | None = None  # file inside a downloaded zip
+    tlc: int = 0  # apply the Test-time Local Converter with this training crop size (NAFNet)
+    precomputed: str | None = None  # outputs made by an external runner, under OUT_DIR/<op>/<this>/<set>/
 
     @property
     def path(self) -> Path:
@@ -30,7 +37,7 @@ class Candidate:
 
     @property
     def scale(self) -> int:
-        return 2 if self.op == "upscale2x" else 1
+        return 2 if self.op == "upscale2x" else 1  # unblur is 1x
 
     @property
     def model_scale(self) -> int:
