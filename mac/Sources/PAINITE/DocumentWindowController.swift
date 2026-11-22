@@ -184,6 +184,10 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSMe
 
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
         switch item.action {
+        case #selector(zoomIn(_:)):
+            return model.viewport?.canZoomIn ?? false
+        case #selector(zoomOut(_:)):
+            return model.viewport?.canZoomOut ?? false
         case #selector(saveDocument(_:)):
             item.title = model.canSaveInPlace ? "Save to Lightroom" : "Export…"
             return model.image != nil && model.loadError == nil && !model.export.isRunning

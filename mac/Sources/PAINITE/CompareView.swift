@@ -341,7 +341,8 @@ final class CompareView: NSView {
     override func layout() {
         super.layout()
         layoutPanes()
-        if fitMode { fit() } else { applyTransform() }
+        // A bigger window can leave the zoom below the new Fit: snap back to Fit.
+        if fitMode || scale < min(fitScale, 1 / backingScale) - 0.0001 { fit() } else { applyTransform() }
     }
 
     private func layoutPanes() {
@@ -532,6 +533,9 @@ final class CompareView: NSView {
         center = CGPoint(x: imageSize.width / 2, y: imageSize.height / 2)
         applyTransform()
     }
+
+    var canZoomIn: Bool { imageSize.width > 0 && scale < CompareView.maxZoom / backingScale - 0.0001 }
+    var canZoomOut: Bool { imageSize.width > 0 && scale > min(fitScale, 1 / backingScale) + 0.0001 }
 
     func actualSize() { setScale(1 / backingScale, anchor: nil) }
     func zoomIn() { setScale(scale * 2, anchor: nil) }
