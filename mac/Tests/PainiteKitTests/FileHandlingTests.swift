@@ -109,3 +109,31 @@ final class CATrustTests: XCTestCase {
         XCTAssertEqual(CATrust.defaultCAPath(configPath: URL(fileURLWithPath: "/x/painite/config.json")).path, "/x/painite/ca.pem")
     }
 }
+
+final class TileGridTests: XCTestCase {
+    func testSnapUnrotated() {
+        let r = TileGrid.snap(Region(x: 600, y: 300, w: 200, h: 200), storedWidth: 1500, storedHeight: 1000, orientation: 1, tile: 512)
+        XCTAssertEqual(r, Region(x: 512, y: 0, w: 512, h: 512))
+        // Clipped at the image edge.
+        let e = TileGrid.snap(Region(x: 1400, y: 900, w: 100, h: 100), storedWidth: 1500, storedHeight: 1000, orientation: 1, tile: 512)
+        XCTAssertEqual(e, Region(x: 1024, y: 512, w: 476, h: 488))
+    }
+
+    func testSnapRotated() {
+        // Orientation 6 (90° CW): stored 1500x1000 displays as 1000x1500.
+        // Display top-left corner maps to stored x 0..., y from the bottom; the grid is
+        // anchored at the stored origin, so the snapped box hugs the display's right/top edges.
+        let r = TileGrid.snap(Region(x: 0, y: 0, w: 10, h: 10), storedWidth: 1500, storedHeight: 1000, orientation: 6, tile: 512)
+        // Stored rect: x 0..9, y 990..999 -> snapped x 0..511, y 512..999 -> display x 0..487, y 0..511.
+        XCTAssertEqual(r, Region(x: 0, y: 0, w: 488, h: 512))
+        // Round trip is consistent for every orientation: the snapped box contains the request.
+        for o in 1...8 {
+            let want = Region(x: 333, y: 444, w: 50, h: 60)
+            let (dw, dh) = o >= 5 ? (1000, 1500) : (1500, 1000)
+            XCTAssertLessThan(want.x + want.w, dw)
+            XCTAssertLessThan(want.y + want.h, dh)
+            let s = TileGrid.snap(want, storedWidth: 1500, storedHeight: 1000, orientation: o, tile: 512)
+            XCTAssertTrue(PreviewGeometry.covers(s, want), "orientation \(o): \(s)")
+        }
+    }
+}
