@@ -127,7 +127,7 @@ ol.steps > li::before {
 /* Before / after slider */
 .compare {
   position: relative; overflow: hidden; border-radius: var(--radius); border: 1px solid var(--border);
-  background: #000; user-select: none; touch-action: pan-y; cursor: ew-resize;
+  background: #000; user-select: none; -webkit-user-select: none; touch-action: pan-y; cursor: ew-resize;
 }
 .compare img { width: 100%; pointer-events: none; }
 .compare .after-wrap { position: absolute; inset: 0; clip-path: inset(0 0 0 var(--pos, 50%)); }
@@ -147,10 +147,12 @@ ol.steps > li::before {
 }
 .compare .tag.before { left: 10px; }
 .compare .tag.after { right: 10px; background: rgba(224,88,47,.9); }
+.compare .divider, .compare .tag { pointer-events: none; }
+/* Kept for keyboard and screen readers; dragging is handled on the photo (compare.js). */
 .compare input[type=range] {
-  position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: ew-resize; margin: 0;
+  position: absolute; left: 0; bottom: 0; width: 100%; height: 1px; opacity: 0; margin: 0; pointer-events: none;
 }
-.compare input[type=range]:focus-visible + .divider { outline: 3px solid var(--accent); }
+.compare:has(input:focus-visible) { outline: 3px solid var(--accent); outline-offset: 2px; }
 figure { margin: 0; }
 figcaption { color: var(--muted); font-size: 14px; margin-top: 8px; }
 
