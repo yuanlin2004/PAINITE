@@ -1,0 +1,205 @@
+# Bake-off candidates. Weights are downloaded by fetch.py into $PAINITE_BENCH_DIR/weights
+# and checked against sha256. Licenses are recorded for the manifests; they did not
+# filter the selection (see docs/DESIGN.md §8).
+
+[[model]]
+id = "denoise/nafnet-sidd-w64"
+op = "denoise"
+file = "NAFNet-SIDD-width64.pth"
+url = "https://huggingface.co/nyanko7/nafnet-models/resolve/main/NAFNet-SIDD-width64.pth"
+upstream = "https://github.com/megvii-research/NAFNet"
+sha256 = "cd685efaae01f7c4e9951f2deab05780079c8eb1e49ed664b72f6db04dabb445"
+license = "MIT"
+
+[[model]]
+id = "denoise/restormer-real"
+op = "denoise"
+file = "Restormer-real_denoising.pth"
+url = "https://github.com/swz30/Restormer/releases/download/v1.0/real_denoising.pth"
+upstream = "https://github.com/swz30/Restormer"
+sha256 = "4cae18bed8a291b9a5deeeab48756bbe6f61fcf7f31a4cca0969b24608601387"
+license = "Academic, non-commercial (Restormer LICENSE.md)"
+
+[[model]]
+id = "denoise/scunet-real-psnr"
+op = "denoise"
+file = "scunet_color_real_psnr.pth"
+url = "https://github.com/cszn/KAIR/releases/download/v1.0/scunet_color_real_psnr.pth"
+upstream = "https://github.com/cszn/SCUNet"
+sha256 = "fa78899ba2caec9d235a900e91d96c689da71c42029230c2028b00f09f809c2e"
+license = "Apache-2.0"
+
+[[model]]
+id = "denoise/scunet-real-gan"
+op = "denoise"
+file = "scunet_color_real_gan.pth"
+url = "https://github.com/cszn/KAIR/releases/download/v1.0/scunet_color_real_gan.pth"
+upstream = "https://github.com/cszn/SCUNet"
+sha256 = "892c83f812c59173273b74f4f34a14ecaf57a2fdb68df056664589beb55c966e"
+license = "Apache-2.0"
+
+[[model]]
+id = "denoise/realplksr-nomosv2"
+op = "denoise"
+file = "1xDeNoise_realplksr_otf.safetensors"
+url = "https://huggingface.co/Phips/1xDeNoise_realplksr_otf/resolve/main/1xDeNoise_realplksr_otf.safetensors"
+upstream = "https://github.com/Phhofm/models/releases/tag/1xDeNoise_realplksr_otf"
+sha256 = "0a3e22bdcb70dd790fce66f45df8d07e774e269b17c92a2835162b150d4a365c"
+license = "CC-BY-4.0"
+
+[[model]]
+id = "sharpen/nafnet-gopro-w64"
+op = "sharpen"
+file = "NAFNet-GoPro-width64.pth"
+url = "https://huggingface.co/nyanko7/nafnet-models/resolve/main/NAFNet-GoPro-width64.pth"
+upstream = "https://github.com/megvii-research/NAFNet"
+sha256 = "329d3ab4077b8d6b7ff61de376e483714667960bf85be027bf4335cda701196f"
+license = "MIT"
+
+[[model]]
+id = "sharpen/nafnet-reds-w64"
+op = "sharpen"
+file = "NAFNet-REDS-width64.pth"
+url = "https://huggingface.co/nyanko7/nafnet-models/resolve/main/NAFNet-REDS-width64.pth"
+upstream = "https://github.com/megvii-research/NAFNet"
+sha256 = "175fe8b3cdf3abedfbc87769779c3d9f491e05bb2e73ea9d627883f90a4b2df3"
+license = "MIT"
+
+[[model]]
+id = "sharpen/restormer-motion"
+op = "sharpen"
+file = "Restormer-motion_deblurring.pth"
+url = "https://github.com/swz30/Restormer/releases/download/v1.0/motion_deblurring.pth"
+upstream = "https://github.com/swz30/Restormer"
+sha256 = "194e38fb5b607c9dc5a5b3e08e65b2e79ee2bf0ef5048e0612f6b2ff2f79da31"
+license = "Academic, non-commercial (Restormer LICENSE.md)"
+
+[[model]]
+id = "sharpen/restormer-defocus"
+op = "sharpen"
+file = "Restormer-defocus_deblurring.pth"
+url = "https://github.com/swz30/Restormer/releases/download/v1.0/single_image_defocus_deblurring.pth"
+upstream = "https://github.com/swz30/Restormer"
+sha256 = "7dce451f33f8f5e0faf7c4e3996e5dcc1bd425ecd1ada99b0f9750e490fd4c9e"
+license = "Academic, non-commercial (Restormer LICENSE.md)"
+
+[[model]]
+id = "upscale2x/realesrgan-x2plus"
+op = "upscale2x"
+file = "RealESRGAN_x2plus.pth"
+url = "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.1/RealESRGAN_x2plus.pth"
+upstream = "https://github.com/xinntao/Real-ESRGAN"
+sha256 = "49fafd45f8fd7aa8d31ab2a22d14d91b536c34494a5cfe31eb5d89c2fa266abb"
+license = "BSD-3-Clause"
+
+[[model]]
+id = "upscale2x/nomosuni-esrgan-multijpg"
+op = "upscale2x"
+file = "2xNomosUni_esrgan_multijpg.safetensors"
+url = "https://huggingface.co/Phips/2xNomosUni_esrgan_multijpg/resolve/main/2xNomosUni_esrgan_multijpg.safetensors"
+upstream = "https://github.com/Phhofm/models"
+sha256 = "d71c55cc1c70fbb7ac42a25e37bcb99a46672de0bc750924bea81e57c163b5ab"
+license = "CC-BY-4.0"
+
+[[model]]
+id = "upscale2x/swinir-m-real-gan"
+op = "upscale2x"
+file = "SwinIR-M_x2_realGAN.pth"
+url = "https://github.com/JingyunLiang/SwinIR/releases/download/v0.0/003_realSR_BSRGAN_DFO_s64w8_SwinIR-M_x2_GAN.pth"
+upstream = "https://github.com/JingyunLiang/SwinIR"
+sha256 = "f397408977a3e07eb06afb7238d453a12ef35ebab7328a54241f307860dbe342"
+license = "Apache-2.0"
+
+[[model]]
+id = "upscale2x/swinir-m-classical"
+op = "upscale2x"
+file = "SwinIR-M_x2_classical.pth"
+url = "https://github.com/JingyunLiang/SwinIR/releases/download/v0.0/001_classicalSR_DF2K_s64w8_SwinIR-M_x2.pth"
+upstream = "https://github.com/JingyunLiang/SwinIR"
+sha256 = "2032ebf8f401dd3ce2fae5f3852117cb72101ec6ed8358faa64c2a3fa09ed4ac"
+license = "Apache-2.0"
+
+[[model]]
+id = "upscale2x/hat-imagenet"
+op = "upscale2x"
+file = "HAT_SRx2_ImageNet-pretrain.pth"
+url = "gdrive:11WDyK4MMcRapHs_aKJKHaYAFsb29SoCw"
+upstream = "https://github.com/XPixelGroup/HAT"
+sha256 = "82ebd911263bcc886fbef46b30cf97b92a932a27a3cba30163d4577afb09b9d7"
+license = "Apache-2.0"
+
+[[model]]
+id = "upscale2x/hat-l-imagenet"
+op = "upscale2x"
+file = "HAT-L_SRx2_ImageNet-pretrain.pth"
+url = "gdrive:16xtMezHvckdWEuSiOxcO-dgOlsI0rEUg"
+upstream = "https://github.com/XPixelGroup/HAT"
+sha256 = "2818c7ca8d72ec4cc5f31c93203d55252a662dd35cda34ce1a69661f97dcd38f"
+license = "Apache-2.0"
+
+# Classical baselines stand in for "existing tools" on Linux; see README.
+[[model]]
+id = "denoise/baseline-nlmeans"
+op = "denoise"
+baseline = "nlmeans"
+
+[[model]]
+id = "sharpen/baseline-unsharp"
+op = "sharpen"
+baseline = "unsharp"
+
+[[model]]
+id = "upscale2x/baseline-lanczos"
+op = "upscale2x"
+baseline = "lanczos"
+
+# Sharpen via super-resolution: run a 2x model, then area-downscale to the original size.
+# Real-world SR models restore lens/demosaic softness that motion deblurrers are not trained on.
+[[model]]
+id = "sharpen/realesrgan-x2-down"
+op = "sharpen"
+via = "upscale2x/realesrgan-x2plus"
+
+[[model]]
+id = "sharpen/swinir-real-x2-down"
+op = "sharpen"
+via = "upscale2x/swinir-m-real-gan"
+# HAT-L via 2x was dropped: about 13 s per 512 px tile on the Spark (see BAKEOFF.md).
+
+[[model]]
+id = "sharpen/nomosuni-x2-down"
+op = "sharpen"
+via = "upscale2x/nomosuni-esrgan-multijpg"
+
+# Same models with the low-frequency color/tone anchor (painite_bench/models.py:color_anchor).
+[[model]]
+id = "sharpen/nomosuni-x2-down+anchor"
+op = "sharpen"
+via = "upscale2x/nomosuni-esrgan-multijpg"
+anchor = 4
+
+[[model]]
+id = "sharpen/realesrgan-x2-down+anchor"
+op = "sharpen"
+via = "upscale2x/realesrgan-x2plus"
+anchor = 4
+
+[[model]]
+id = "upscale2x/nomosuni-esrgan-multijpg+anchor"
+op = "upscale2x"
+file = "2xNomosUni_esrgan_multijpg.safetensors"
+url = "https://huggingface.co/Phips/2xNomosUni_esrgan_multijpg/resolve/main/2xNomosUni_esrgan_multijpg.safetensors"
+upstream = "https://github.com/Phhofm/models"
+sha256 = "d71c55cc1c70fbb7ac42a25e37bcb99a46672de0bc750924bea81e57c163b5ab"
+license = "CC-BY-4.0"
+anchor = 8
+
+[[model]]
+id = "denoise/scunet-real-gan+anchor"
+op = "denoise"
+file = "scunet_color_real_gan.pth"
+url = "https://github.com/cszn/KAIR/releases/download/v1.0/scunet_color_real_gan.pth"
+upstream = "https://github.com/cszn/SCUNet"
+sha256 = "892c83f812c59173273b74f4f34a14ecaf57a2fdb68df056664589beb55c966e"
+license = "Apache-2.0"
+anchor = 8

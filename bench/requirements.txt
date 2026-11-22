@@ -1,0 +1,9 @@
+# Install torch first from the CUDA index, e.g. on the DGX Spark (aarch64, CUDA 13):
+#   uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cu130
+spandrel==0.4.2
+spandrel_extra_arches==0.2.0
+pyiqa==0.1.16
+opencv-python-headless==5.1.0.95
+numpy==2.5.4
+scikit-image==0.26.0
+gdown==6.5.2

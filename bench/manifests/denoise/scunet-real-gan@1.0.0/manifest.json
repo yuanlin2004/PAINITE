@@ -1,0 +1,31 @@
+{
+  "id": "denoise/scunet-real-gan@1.0.0",
+  "operation": "denoise",
+  "version": "1.0.0",
+  "architecture": "SCUNet",
+  "scale": 1,
+  "dtype": "fp16",
+  "weights": {
+    "file": "scunet_color_real_gan.pth",
+    "url": "https://github.com/cszn/KAIR/releases/download/v1.0/scunet_color_real_gan.pth",
+    "sha256": "892c83f812c59173273b74f4f34a14ecaf57a2fdb68df056664589beb55c966e"
+  },
+  "upstream": "https://github.com/cszn/SCUNet",
+  "license": "Apache-2.0",
+  "tiling": {
+    "tile": 512,
+    "overlap": 64,
+    "batch": 1
+  },
+  "postprocess": [
+    {
+      "type": "color_anchor",
+      "sigma": 8
+    }
+  ],
+  "strength": "blend: out = input + strength * (model - input)",
+  "alternates": [
+    "denoise/scunet-real-psnr (smoother, highest PSNR; same speed)"
+  ],
+  "selected_by": "bench/BAKEOFF.md (M0 bake-off, 2026-11-21)"
+}

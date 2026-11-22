@@ -1,0 +1,32 @@
+{
+  "id": "sharpen/realesrgan-x2-down@1.0.0",
+  "operation": "sharpen",
+  "version": "1.0.0",
+  "architecture": "ESRGAN (RRDBNet)",
+  "scale": 1,
+  "dtype": "fp16",
+  "weights": {
+    "file": "RealESRGAN_x2plus.pth",
+    "url": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.1/RealESRGAN_x2plus.pth",
+    "sha256": "49fafd45f8fd7aa8d31ab2a22d14d91b536c34494a5cfe31eb5d89c2fa266abb"
+  },
+  "upstream": "https://github.com/xinntao/Real-ESRGAN",
+  "license": "BSD-3-Clause",
+  "tiling": {
+    "tile": 512,
+    "overlap": 64,
+    "batch": 1
+  },
+  "postprocess": [
+    {
+      "type": "area_downscale",
+      "factor": 2
+    },
+    {
+      "type": "color_anchor",
+      "sigma": 4
+    }
+  ],
+  "strength": "blend: out = input + strength * (model - input)",
+  "selected_by": "bench/BAKEOFF.md (M0 bake-off, 2026-11-21)"
+}
