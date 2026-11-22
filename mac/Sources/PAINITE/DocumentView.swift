@@ -265,8 +265,8 @@ struct DocumentView: View {
         case .idle: EmptyView()
         case .hashing: Text("Checking the server for this photo…")
         case .uploading(let p):
-            ProgressView(value: p) { Text("Uploading original… \(Int(p * 100))%") }
-        case .ready: Text("Original is on the server")
+            ProgressView(value: p) { Text("Uploading photo… \(Int(p * 100))%") }
+        case .ready: Text("Photo uploaded to server")
         case .failed(let msg): Text(msg).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
         }
     }
