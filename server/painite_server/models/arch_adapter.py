@@ -1,10 +1,18 @@
-"""Runs restoration networks that spandrel does not know, from the vendored
-definitions in `arches/` (the unblur picks, bench/UNBLUR.md).
+"""Runs restoration networks that spandrel does not know (the unblur picks,
+bench/UNBLUR.md).
+
+PAINITE does not ship these networks' code: their licenses (Stripformer:
+non-commercial; LaKDNet: AGPL-3.0) differ from PAINITE's. Like the weights,
+the upstream source file is one of the model's manifest files, downloaded from
+the pinned upstream commit and SHA-256 checked by `models pull`, and imported
+from the model's install directory. `server/third_party/arches/` keeps
+reference copies for the tests.
 
 Manifest config:
 
     "config": {
       "arch": "stripformer",          # a key of ARCHES
+      "arch_source": "Stripformer.py",  # optional; ARCHES' file name otherwise
       "weights": "stripformer_RealBlur_J.pth",
       "dtype": "fp16",                # fp16 | bf16 | fp32
       "context": 64,                  # px of real image context around each tile
@@ -18,7 +26,9 @@ color anchor would put the blur back (bench/UNBLUR.md).
 
 from __future__ import annotations
 
+import importlib.util
 import logging
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -33,16 +43,38 @@ log = logging.getLogger("painite.models")
 
 @dataclass(frozen=True)
 class Arch:
-    build: Callable[[dict[str, Any]], Any]  # config -> the bare network the weights load into
+    source: str  # upstream file that defines the network, installed with the model
+    build: Callable[[Any, dict[str, Any]], Any]  # (source module, config) -> the bare network
     pad_multiple: int
     wrap: Callable[[Any], Any] | None = None  # bare network -> module mapping [0,1] RGB to [0,1] RGB
     supports_half: bool = True
 
 
-def _stripformer(config: dict[str, Any]):
-    from .arches.stripformer import Stripformer  # noqa: PLC0415
+def load_source(path: Path):
+    """Import a network definition file from a model's install directory."""
+    if not path.is_file():
+        raise FileNotFoundError(
+            f"{path.name} is missing from {path.parent}; reinstall the model with "
+            f"`painite-server models pull <id> --accept-license` (it downloads only what is missing)")
+    name = f"painite_arch_{path.parent.name}_{path.stem}".replace("@", "_").replace(".", "_").replace("-", "_")
+    if name in sys.modules:
+        return sys.modules[name]
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    sys.modules[name] = module
+    return module
 
-    return Stripformer()
+
+def build(arch: str, config: dict[str, Any], source_dir: Path):
+    """Build the bare network for `arch` from its source file in `source_dir`."""
+    spec = ARCHES[arch]
+    module = load_source(source_dir / config.get("arch_source", spec.source))
+    return spec.build(module, config)
+
+
+def _stripformer(module, config: dict[str, Any]):
+    return module.Stripformer()
 
 
 def _centered(net):
@@ -60,17 +92,15 @@ def _centered(net):
     return Centered()
 
 
-def _lakdnet(config: dict[str, Any]):
-    from .arches.lakdnet import LaKDNet  # noqa: PLC0415
-
+def _lakdnet(module, config: dict[str, Any]):
     kw = {"dim": 32, "num_blocks": [8, 12, 12, 16], "mix_kernel_size": [9, 9, 9, 9]}
     kw.update(config.get("arch_kwargs", {}))
-    return LaKDNet(inp_channels=3, out_channels=3, **kw)
+    return module.LaKDNet(inp_channels=3, out_channels=3, **kw)
 
 
 ARCHES: dict[str, Arch] = {
-    "stripformer": Arch(_stripformer, pad_multiple=8, wrap=_centered),
-    "lakdnet": Arch(_lakdnet, pad_multiple=8),
+    "stripformer": Arch("Stripformer.py", _stripformer, pad_multiple=8, wrap=_centered),
+    "lakdnet": Arch("LaKDNet.py", _lakdnet, pad_multiple=8),
 }
 
 
@@ -127,7 +157,7 @@ class ArchModel(SpandrelModel):
                 log.warning("CUDA is not available; running %s on the CPU (slow)", self.id)
                 self.device = "cpu"
             spec = ARCHES[self.arch]
-            net = spec.build(self.config)
+            net = build(self.arch, self.config, self.weights_path.parent)
             net.load_state_dict(_state_dict(self.weights_path), strict=True)
             if spec.wrap is not None:
                 net = spec.wrap(net)

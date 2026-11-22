@@ -1,8 +1,13 @@
 # Release builds for the painite CLI (DESIGN.md section 6).
 # Snapshot locally or in CI:  goreleaser release --snapshot --clean   (run in cli/)
-# Real releases run from .github/workflows/release-cli.yml on a v* tag (draft release).
+# Real releases run from .github/workflows/release.yml on a v* tag (draft release).
 version: 2
 project_name: painite
+
+before:
+  hooks:
+    # The license and its NOTICE live at the repository root; package them with the CLI.
+    - cp ../LICENSE ../NOTICE .
 
 builds:
   - id: painite
@@ -17,7 +22,7 @@ archives:
   - id: painite
     formats: [tar.gz]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    files: [README.md]
+    files: [README.md, LICENSE, NOTICE]
 
 nfpms:
   - id: painite-deb
@@ -25,15 +30,20 @@ nfpms:
     file_name_template: "{{ .PackageName }}_{{ .Version }}_{{ .Arch }}"
     ids: [painite]
     formats: [deb]
-    maintainer: PAINITE <noreply@users.noreply.github.com>
+    maintainer: Yuan Lin <noreply@users.noreply.github.com>
+    vendor: Yuan Lin
     description: Command line client for the PAINITE photo enhancement server.
-    homepage: https://github.com/yuanlin2004/PAINITE
-    license: Proprietary
+    homepage: https://yuanlin2004.github.io/PAINITE/
+    license: Apache-2.0
     section: graphics
     bindir: /usr/bin
     contents:
       - src: README.md
         dst: /usr/share/doc/painite/README.md
+      - src: LICENSE
+        dst: /usr/share/doc/painite/copyright
+      - src: NOTICE
+        dst: /usr/share/doc/painite/NOTICE
 
 checksum:
   name_template: SHA256SUMS

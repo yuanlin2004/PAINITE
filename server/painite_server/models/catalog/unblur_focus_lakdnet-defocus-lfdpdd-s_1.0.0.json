@@ -12,6 +12,11 @@
       "name": "lakdnet_defocus_lfdpdd_s.pth",
       "url": "https://lakdnet.mpi-inf.mpg.de/Weights/Defocus/train_on_lfdpdd_s/train_on_lfdpdd_s.pth",
       "sha256": "0f85ce4f4796e5c669b177fead47fa24fe777c3d855e9025f013a950f94ba26a"
+    },
+    {
+      "name": "LaKDNet.py",
+      "url": "https://raw.githubusercontent.com/lingyanruan/LaKDNet/0c6b262cd84bfaa407d79e085010fa90ea7446e6/models/LaKDNet.py",
+      "sha256": "249bd0fb755ddc7cd75cc9a8c03a68926a58fcbf8626c57c98636a4a75a0a375"
     }
   ],
   "config": {

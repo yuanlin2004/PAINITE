@@ -1,0 +1,33 @@
+PAINITE
+Copyright 2026 Yuan Lin
+
+This product includes software developed by Yuan Lin
+(https://github.com/yuanlin2004/PAINITE).
+
+Licensed under the Apache License, Version 2.0 (see LICENSE). Under section 4(d)
+of that license, any redistribution of PAINITE or of a work derived from it
+must include a readable copy of this NOTICE file, including the attribution to
+Yuan Lin above.
+
+-------------------------------------------------------------------------------
+Third-party code included in PAINITE
+-------------------------------------------------------------------------------
+
+server/painite_server/models/gpen_arch.py
+  GPEN generator from https://github.com/yangxy/GPEN (Tao Yang et al.), with
+  the StyleGAN2 CUDA operators replaced by pure-PyTorch equivalents. The GPEN
+  repository has no license file; the same network is distributed by ModelScope
+  (https://github.com/modelscope/modelscope) under the Apache License 2.0.
+
+-------------------------------------------------------------------------------
+Not included: model weights and the unblur networks
+-------------------------------------------------------------------------------
+
+PAINITE ships no model weights. `painite-server models pull` downloads each
+model from its upstream source after the server operator accepts that model's
+license (shown by `painite-server models list`). The unblur networks'
+source code (Stripformer: non-commercial license; LaKDNet: AGPL-3.0) is
+downloaded the same way and is not part of PAINITE or covered by its license.
+Some model licenses forbid commercial use; check them before you use PAINITE
+commercially. server/third_party/ holds reference copies used only by the
+tests, under their own licenses.

@@ -1,0 +1,64 @@
+title: Home
+description: PAINITE is an AI photo enhancement app for Mac and a command line tool for macOS and Linux, powered by your own GPU server.
+---
+<section class="hero">
+  <div>
+    <img class="logo-light" src="assets/logo.svg" alt="PAINITE — Photo Brilliance" width="440" height="140">
+    <img class="logo-dark" src="assets/logo-dark.svg" alt="PAINITE — Photo Brilliance" width="440" height="140">
+    <p class="lede">AI photo enhancement that runs on your own GPU server. Remove noise, sharpen, fix camera shake and missed focus, restore faces and upscale, from a Mac app, from Lightroom, or from the command line.</p>
+    <div class="buttons">
+      <a class="btn primary" href="install.html">Get started</a>
+      <a class="btn" href="https://github.com/yuanlin2004/PAINITE/releases/latest">Download v1.0</a>
+      <a class="btn" href="#examples">See examples</a>
+    </div>
+  </div>
+  <figure>
+    <div class="compare">
+      <img src="assets/samples/pipeline/before.jpg" alt="Original photo">
+      <div class="after-wrap"><img src="assets/samples/pipeline/after.jpg" alt="The same photo enhanced by PAINITE"></div>
+      <input type="range" min="0" max="100" value="50" aria-label="Drag to compare before and after">
+      <div class="divider"></div>
+      <span class="tag before">BEFORE</span><span class="tag after">AFTER</span>
+    </div>
+    <figcaption>Drag the handle to compare. Denoise, sharpen and 2× upscale in one pass.</figcaption>
+  </figure>
+</section>
+
+<h2>How it works</h2>
+<div class="grid">
+  <div class="card">
+    <h3>1. Run the server on your GPU</h3>
+    <p>The PAINITE server runs the AI models on an NVIDIA GPU machine on your network. It was built for the <strong>NVIDIA DGX Spark</strong>. Your photos never leave your network.</p>
+  </div>
+  <div class="card">
+    <h3>2. Enhance from your Mac or terminal</h3>
+    <p>The <strong>Mac app</strong> shows a live before/after preview of the area you choose, then exports the full photo. The <strong><code>painite</code> command</strong> runs batches on macOS or Linux.</p>
+  </div>
+  <div class="card">
+    <h3>3. Keep your workflow</h3>
+    <p>Use PAINITE as a <strong>Lightroom desktop “Edit in”</strong> editor. Results are written beside the original, which is never changed.</p>
+  </div>
+</div>
+
+<h2 id="examples">What it can do</h2>
+<p>Each example is a crop at 100%. Drag across a photo to compare. Details and tips are on the <a href="enhancements.html">Enhancements</a> page.</p>
+<div class="samples">
+<!--SAMPLES-->
+</div>
+
+<h2>Get PAINITE</h2>
+<div class="table-wrap">
+<table class="downloads">
+  <thead><tr><th>Component</th><th>Runs on</th><th>Download</th></tr></thead>
+  <tbody>
+    <tr><td>Server</td><td>NVIDIA DGX Spark (Ubuntu, Docker, NVIDIA Container Toolkit)</td><td><a href="https://github.com/yuanlin2004/PAINITE/releases/download/v1.0.0/painite-server_1.0.0.tar.gz">painite-server_1.0.0.tar.gz</a></td></tr>
+    <tr><td>Mac app</td><td>macOS 14 or later, Apple silicon</td><td><a href="https://github.com/yuanlin2004/PAINITE/releases/download/v1.0.0/PAINITE_1.0.0_macos_arm64.zip">PAINITE_1.0.0_macos_arm64.zip</a></td></tr>
+    <tr><td>Command line</td><td>Ubuntu 24.04+ (x86-64, ARM64)</td><td><a href="https://github.com/yuanlin2004/PAINITE/releases/download/v1.0.0/painite_1.0.0_amd64.deb">.deb amd64</a> · <a href="https://github.com/yuanlin2004/PAINITE/releases/download/v1.0.0/painite_1.0.0_arm64.deb">.deb arm64</a></td></tr>
+    <tr><td>Command line</td><td>macOS (Apple silicon), other Linux</td><td><a href="https://github.com/yuanlin2004/PAINITE/releases/download/v1.0.0/painite_1.0.0_darwin_arm64.tar.gz">macOS</a> · <a href="https://github.com/yuanlin2004/PAINITE/releases/download/v1.0.0/painite_1.0.0_linux_amd64.tar.gz">Linux x86-64</a> · <a href="https://github.com/yuanlin2004/PAINITE/releases/download/v1.0.0/painite_1.0.0_linux_arm64.tar.gz">Linux ARM64</a></td></tr>
+  </tbody>
+</table>
+</div>
+<p>Then follow the <a href="install.html">installation guide</a>. Checksums are listed on the <a href="https://github.com/yuanlin2004/PAINITE/releases/tag/v1.0.0">release page</a>.</p>
+
+<h2>Open source</h2>
+<p>PAINITE is written by Yuan Lin and released under the <a href="https://github.com/yuanlin2004/PAINITE/blob/main/LICENSE">Apache License 2.0</a>. If you redistribute PAINITE or build on it, keep its <a href="https://github.com/yuanlin2004/PAINITE/blob/main/NOTICE">NOTICE</a> file with your copy. The AI models come from their authors under their own licenses. Some allow only non-commercial use; see <a href="help.html#licenses">model licenses</a>.</p>

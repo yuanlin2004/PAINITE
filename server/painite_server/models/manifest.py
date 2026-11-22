@@ -25,6 +25,12 @@ from typing import Any
 
 log = logging.getLogger("painite.models")
 
+# The project's copy of every catalog file, a GitHub release of the PAINITE
+# repository (.github/workflows/mirror-models.yml), tried before the upstream URL
+# so a model keeps working if its authors take a download down. Set
+# PAINITE_MODEL_MIRROR to another base URL, or to "" to use upstream only.
+DEFAULT_MIRROR = "https://github.com/yuanlin2004/PAINITE/releases/download/models-v1/"
+
 ID_RE = re.compile(r"^(denoise|sharpen|unblur_motion|unblur_focus|upscale2x|face)/([a-z0-9][a-z0-9._-]*)@([0-9A-Za-z.+-]+)$")
 MANIFEST = "manifest.json"
 
@@ -66,6 +72,10 @@ class Manifest:
 
     def install_dir(self, data_dir: Path) -> Path:
         return models_dir(data_dir) / self.operation / f"{self.name}@{self.version}"
+
+    def mirror_name(self, f: ModelFile) -> str:
+        """The file's name in the mirror release: <operation>.<name>-<version>.<file>."""
+        return f"{self.operation}.{self.name}-{self.version}.{f.name}"
 
     @classmethod
     def parse(cls, data: dict[str, Any]) -> Manifest:
@@ -167,9 +177,22 @@ def _download(url: str, dest: Path, progress: Callable[[int, int | None], None] 
                 progress(done, total_n)
 
 
-def pull(m: Manifest, data_dir: Path, progress: Callable[[str, int, int | None], None] | None = None) -> Path:
+def mirror_base() -> str:
+    base = os.environ.get("PAINITE_MODEL_MIRROR", DEFAULT_MIRROR)
+    return base if not base or base.endswith("/") else base + "/"
+
+
+def sources(m: Manifest, f: ModelFile, mirror: str | None = None) -> list[str]:
+    """Where to download a file from, in order: the mirror, then upstream."""
+    mirror = mirror_base() if mirror is None else mirror
+    return ([mirror + m.mirror_name(f)] if mirror else []) + [f.url]
+
+
+def pull(m: Manifest, data_dir: Path, progress: Callable[[str, int, int | None], None] | None = None,
+         mirror: str | None = None) -> Path:
     """Download and verify every file, then write the manifest last so a
-    partial install is never loaded."""
+    partial install is never loaded. Each file comes from the first source
+    (mirror, then upstream) that serves the expected SHA-256."""
     final = m.install_dir(data_dir)
     staging = final.with_name(final.name + ".partial")
     shutil.rmtree(staging, ignore_errors=True)
@@ -181,10 +204,21 @@ def pull(m: Manifest, data_dir: Path, progress: Callable[[str, int, int | None],
             if existing.is_file() and _sha256(existing) == f.sha256:
                 shutil.copy2(existing, target)
                 continue
-            _download(f.url, target, (lambda d, t, n=f.name: progress(n, d, t)) if progress else None)
-            got = _sha256(target)
-            if got != f.sha256:
-                raise ManifestError(f"{f.name}: SHA-256 mismatch (expected {f.sha256}, got {got})")
+            errors = []
+            for url in sources(m, f, mirror):
+                try:
+                    _download(url, target, (lambda d, t, n=f.name: progress(n, d, t)) if progress else None)
+                except OSError as e:  # URLError, HTTPError, timeouts
+                    errors.append(f"{url}: {e}")
+                    log.warning("%s: download from %s failed: %s", f.name, url, e)
+                    continue
+                got = _sha256(target)
+                if got == f.sha256:
+                    break
+                errors.append(f"{url}: SHA-256 mismatch (expected {f.sha256}, got {got})")
+                log.warning("%s: %s served the wrong file", f.name, url)
+            else:
+                raise ManifestError(f"{f.name}: no source worked:\n  " + "\n  ".join(errors))
         (staging / MANIFEST).write_text(json.dumps(m.to_json(), indent=2) + "\n")
         if final.exists():
             shutil.rmtree(final)

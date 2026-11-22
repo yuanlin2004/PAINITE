@@ -6,3 +6,6 @@ __pycache__/
 server/.data/
 /cli/painite
 /cli/dist/
+/cli/LICENSE
+/cli/NOTICE
+/site/_site/

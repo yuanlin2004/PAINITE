@@ -1,0 +1,24 @@
+name: Mirror models
+
+# Keeps a copy of every catalog model file in the models-v1 release
+# (.github/scripts/mirror_models.py). Runs when the catalog changes on main, or by hand.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["server/painite_server/models/catalog/**", ".github/scripts/mirror_models.py", ".github/workflows/mirror-models.yml"]
+
+permissions:
+  contents: write
+
+concurrency: mirror-models
+
+jobs:
+  mirror:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download, verify and upload
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 .github/scripts/mirror_models.py

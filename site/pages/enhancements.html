@@ -1,0 +1,78 @@
+title: Enhancements
+description: What each PAINITE enhancement does, when to use it, and examples: denoise, sharpen, unblur, face, upscale.
+---
+<div class="prose">
+<p class="eyebrow">Enhancements</p>
+<h1>What each enhancement does</h1>
+<p class="lede">Six enhancements, each powered by a model picked in side-by-side tests on real photos. Use one, or chain up to four in one pass.</p>
+<div class="toc">
+  <ul>
+    <li><a href="#denoise">Denoise</a> · <a href="#sharpen">Sharpen</a> · <a href="#unblur">Unblur (Motion, Focus)</a> · <a href="#face">Face</a> · <a href="#upscale">Upscale 2×</a> · <a href="#order">Combining steps</a></li>
+  </ul>
+</div>
+
+<h2 id="denoise">Denoise</h2>
+<p>Removes grain from high ISO and low-light photos and cleans up JPEG compression, while keeping fine texture. Start at 0.5. Raise it for very noisy photos, and lower it if skin or foliage starts to look smooth.</p>
+<!--SAMPLE:denoise-->
+<p><small>Model: SCUNet (real-world GAN). CLI: <code>--op denoise</code>.</small></p>
+
+<h2 id="sharpen">Sharpen</h2>
+<p>Restores crisp edges and detail to a slightly soft photo, without the halos of a classic sharpening filter. Best for mild softness from a lens, light diffraction or resizing. For a clearly blurred photo, use Unblur.</p>
+<!--SAMPLE:sharpen-->
+<p><small>Model: Real-ESRGAN 2×, then scaled back to the original size. CLI: <code>--op sharpen</code>.</small></p>
+
+<h2 id="unblur">Unblur</h2>
+<p>Recovers photos ruined by blur. There are two kinds of blur, and each has its own model. PAINITE can't tell them apart reliably, so you choose:</p>
+<div class="grid">
+  <div class="card">
+    <h3>Motion</h3>
+    <p>Edges are <strong>smeared in one direction</strong>, sometimes with double edges. Caused by camera shake or a subject that moved.</p>
+    <p><small>Mac: Unblur, <strong>Motion</strong>. CLI: <code>--op unblur_motion</code>.</small></p>
+  </div>
+  <div class="card">
+    <h3>Focus</h3>
+    <p>Everything is <strong>evenly soft in every direction</strong>, and points of light become discs. Caused by missed focus.</p>
+    <p><small>Mac: Unblur, <strong>Focus</strong>. CLI: <code>--op unblur_focus</code>.</small></p>
+  </div>
+</div>
+<!--SAMPLE:unblur_motion-->
+<!--SAMPLE:unblur_focus-->
+<div class="note">
+  <p>If the result barely changes, try the other kind. Unblur works best on moderate, even blur. Strong or rotating shake, or blur on only one moving subject, improves less. Unblur's strength defaults to 1.0.</p>
+</div>
+<div class="warn">
+  <p><strong>Motion unblur is for non-commercial use only.</strong> Its model (Stripformer) is licensed for non-commercial use. Focus unblur's model (LaKDNet) is AGPL-3.0. See <a href="help.html#licenses">model licenses</a>.</p>
+</div>
+
+<h2 id="face">Face</h2>
+<p>Finds faces and restores them: eyes, skin and hair become clear and natural, while the rest of the photo is left exactly as it was. Good for old prints, small faces in group photos and soft portraits. A photo with no faces comes back unchanged.</p>
+<!--SAMPLE:face-->
+<ul>
+  <li>Faces from 128 to 1024 pixels tall are restored. In the Mac app, <strong>Show faces</strong> marks restored faces in green and skipped ones in dashed orange.</li>
+  <li>Strength blends the restored face with the original. 0.5 is subtle; 1.0 gives the strongest restoration.</li>
+</ul>
+<p><small>Model: GPEN-BFR-1024 with RetinaFace detection. CLI: <code>--op face</code>.</small></p>
+
+<h2 id="upscale">Upscale 2×</h2>
+<p>Doubles the width and height (four times the pixels) and adds real detail, so you can crop more or print larger. It also cleans up JPEG artifacts. Output is limited to 192 megapixels.</p>
+<!--SAMPLE:upscale2x-->
+<p><small>Model: 2× NomosUni ESRGAN. CLI: <code>--op upscale2x</code>.</small></p>
+
+<h2 id="order">Combining steps</h2>
+<p>Steps run top to bottom in one pass. A good order is <strong>Denoise → Unblur → Sharpen → Face → Upscale</strong>: remove noise first so the other steps don't amplify it, and upscale last. The Mac app's presets follow this order.</p>
+<!--SAMPLE:pipeline-->
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Preset</th><th>Steps</th><th>Use for</th></tr></thead>
+  <tbody>
+    <tr><td>Clean Up</td><td>Denoise 0.5</td><td>Everyday noise and JPEG artifacts</td></tr>
+    <tr><td>High ISO</td><td>Denoise 0.7, Sharpen 0.25</td><td>Night, indoor and concert photos</td></tr>
+    <tr><td>Portrait</td><td>Denoise 0.5, Face 0.5</td><td>People</td></tr>
+    <tr><td>Rescue Blur</td><td>Unblur (Motion) 0.5, Sharpen 0.2</td><td>Shaky shots</td></tr>
+    <tr><td>Print 2×</td><td>Denoise 0.4, Sharpen 0.2, Upscale 2×</td><td>Large prints and heavy crops</td></tr>
+  </tbody>
+</table>
+</div>
+<p>On the command line, the same as Print 2×: <code>painite enhance --op denoise:0.4,sharpen:0.2,upscale2x -o out/ photo.tif</code></p>
+<p><small>Sample photos are public domain or CC0, from Wikimedia Commons. Sources and how each was made are listed in <a href="https://github.com/yuanlin2004/PAINITE/blob/main/site/assets/samples/CREDITS.md">CREDITS.md</a>.</small></p>
+</div>

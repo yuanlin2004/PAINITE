@@ -12,6 +12,11 @@
       "name": "stripformer_RealBlur_J.pth",
       "url": "https://drive.usercontent.google.com/download?id=14IiYBFyNTb15FoGQgIkhJqIx62F-_2t-&export=download&confirm=t",
       "sha256": "039afcc6d99ae6eae7c9c4894635d82a055e5ec00bdd6462e80e7dfc4b0875f3"
+    },
+    {
+      "name": "Stripformer.py",
+      "url": "https://raw.githubusercontent.com/pp00704831/Stripformer-ECCV-2022-/9efba889fe2da349714fece642541129b9c313a4/models/Stripformer.py",
+      "sha256": "ad4025452ba3d654075b07725f94317c1bbf4ae6210394bab6cf0d1b83d89434"
     }
   ],
   "config": {

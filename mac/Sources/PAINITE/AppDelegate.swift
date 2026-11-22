@@ -126,6 +126,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func showWelcomeWindow(_ sender: Any?) { showWelcome() }
+
+    // MARK: About and help
+
+    /// The user guide, published from site/ to GitHub Pages.
+    static let guideURL = URL(string: "https://yuanlin2004.github.io/PAINITE/")!
+    static let sourceURL = URL(string: "https://github.com/yuanlin2004/PAINITE")!
+
+    /// The standard About panel, with the user guide and source links in its credits.
+    @objc func showAbout(_ sender: Any?) {
+        let body = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
+        let center = NSMutableParagraphStyle()
+        center.alignment = .center
+        let credits = NSMutableAttributedString()
+        func append(_ text: String, link: URL? = nil) {
+            var attrs: [NSAttributedString.Key: Any] = [.font: body, .paragraphStyle: center,
+                                                        .foregroundColor: NSColor.labelColor]
+            if let link { attrs[.link] = link }
+            credits.append(NSAttributedString(string: text, attributes: attrs))
+        }
+        append("AI photo enhancement by Yuan Lin\n")
+        append("User guide", link: AppDelegate.guideURL)
+        append("  ·  ")
+        append("Source code", link: AppDelegate.sourceURL)
+        NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
+        NSApp.activate()
+    }
+
+    @objc func openUserGuide(_ sender: Any?) {
+        NSWorkspace.shared.open(AppDelegate.guideURL)
+    }
 }
 
 enum MainMenu {
@@ -133,7 +163,8 @@ enum MainMenu {
         let main = NSMenu()
 
         let app = NSMenu(title: "PAINITE")
-        app.addItem(withTitle: "About PAINITE", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        app.addItem(withTitle: "About PAINITE", action: #selector(AppDelegate.showAbout(_:)), keyEquivalent: "")
+        app.addItem(withTitle: "PAINITE User Guide", action: #selector(AppDelegate.openUserGuide(_:)), keyEquivalent: "")
         app.addItem(.separator())
         app.addItem(withTitle: "Settings…", action: #selector(AppDelegate.showSettings(_:)), keyEquivalent: ",")
         app.addItem(.separator())
@@ -191,6 +222,11 @@ enum MainMenu {
         window.addItem(withTitle: "Zoom", action: #selector(NSWindow.performZoom(_:)), keyEquivalent: "")
         add(window, to: main)
         NSApp.windowsMenu = window
+
+        let help = NSMenu(title: "Help")
+        help.addItem(withTitle: "PAINITE User Guide", action: #selector(AppDelegate.openUserGuide(_:)), keyEquivalent: "?")
+        add(help, to: main)
+        NSApp.helpMenu = help
 
         return main
     }

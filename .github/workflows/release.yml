@@ -1,0 +1,103 @@
+name: Release
+
+# A v* tag builds every download and attaches it to a draft GitHub release
+# whose text is docs/release-notes/<tag>.md. Review the draft, then publish it.
+# Pull requests that touch packaging build the CLI packages as a snapshot.
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths: ["cli/**", ".github/workflows/release.yml", "server/install.sh", "mac/build.sh"]
+
+permissions:
+  contents: write
+
+jobs:
+  cli:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: cli/go.mod
+      - name: Snapshot build (pull requests)
+        if: github.event_name == 'pull_request'
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          workdir: cli
+          args: release --snapshot --clean
+      - name: Release (tags)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          workdir: cli
+          args: release --clean --release-notes ../docs/release-notes/${{ github.ref_name }}.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install and run the amd64 package
+        run: |
+          sudo dpkg -i cli/dist/painite_*_amd64.deb
+          painite version
+          dpkg -L painite
+      - uses: actions/upload-artifact@v4
+        with:
+          name: painite-cli
+          path: |
+            cli/dist/*.deb
+            cli/dist/*.tar.gz
+            cli/dist/SHA256SUMS
+
+  mac:
+    # Waits for the draft release that the cli job creates.
+    needs: cli
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build PAINITE.app
+        working-directory: mac
+        run: |
+          brew install librsvg
+          VERSION=${GITHUB_REF_NAME#v}
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" Resources/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $GITHUB_RUN_NUMBER" Resources/Info.plist
+          ./build.sh
+          cp ../LICENSE ../NOTICE build/PAINITE.app/Contents/Resources/
+          codesign --force --sign - build/PAINITE.app
+          ZIP=PAINITE_${VERSION}_macos_arm64.zip
+          ditto -c -k --keepParent build/PAINITE.app "build/$ZIP"
+          (cd build && shasum -a 256 "$ZIP" > "$ZIP.sha256")
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "$GITHUB_REF_NAME" mac/build/PAINITE_*_macos_arm64.zip* --clobber
+
+  server:
+    needs: cli
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package the server source and installer
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          NAME=painite-server_${VERSION}
+          mkdir -p dist
+          # server/ without the tests and the third-party reference copies, plus the API contract and license.
+          git archive --format=tar --prefix="$NAME/" HEAD:server -- \
+            ':!tests' ':!third_party' > "dist/$NAME.tar"
+          mkdir -p "stage/$NAME"
+          cp LICENSE NOTICE "stage/$NAME/"
+          mkdir -p "stage/$NAME/api" && cp api/openapi.yaml "stage/$NAME/api/"
+          tar -rf "dist/$NAME.tar" -C stage "$NAME"
+          gzip -9 "dist/$NAME.tar"
+          (cd dist && sha256sum "$NAME.tar.gz" > "$NAME.tar.gz.sha256")
+          tar -tzf "dist/$NAME.tar.gz" | head -50
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "$GITHUB_REF_NAME" dist/painite-server_*.tar.gz* --clobber

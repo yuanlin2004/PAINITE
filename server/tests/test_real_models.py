@@ -4,6 +4,8 @@ ESRGAN network on the CPU, so they need torch + spandrel but no downloads."""
 from __future__ import annotations
 
 import importlib.util
+import shutil
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -12,6 +14,9 @@ from painite_server.models import ADAPTERS
 from painite_server.models import manifest as mf
 from painite_server.models.arch_adapter import validate_config as validate_arch_config
 from painite_server.models.spandrel_adapter import validate_config
+
+# Reference copies of the upstream network files the unblur models download.
+THIRD_PARTY_ARCHES = Path(__file__).resolve().parents[1] / "third_party" / "arches"
 
 
 def test_catalog_has_the_bakeoff_picks():
@@ -31,6 +36,9 @@ def test_catalog_has_the_bakeoff_picks():
         assert m.adapter in ADAPTERS and m.default
         assert m.config["weights"] in {f.name for f in m.files}
         assert m.config["context"] >= 64
+        if m.adapter == "torch_arch":  # the network code is downloaded with the weights, not shipped
+            from painite_server.models.arch_adapter import ARCHES
+            assert ARCHES[m.config["arch"]].source in {f.name for f in m.files}
         (validate_config if m.adapter == "spandrel" else validate_arch_config)(m.config, m.scale)
 
 
@@ -144,11 +152,14 @@ def test_arch_adapter_runs_odd_sizes_and_preview_matches_export(tmp_path, arch, 
     from conftest import make_image
     from painite_server.imaging import pipeline
     from painite_server.imaging.geometry import Rect
-    from painite_server.models.arch_adapter import ARCHES
+    from painite_server.models import arch_adapter
 
+    # The model's install dir holds the upstream network file, as `models pull` leaves it.
+    source = arch_adapter.ARCHES[arch].source
+    shutil.copy(THIRD_PARTY_ARCHES / source, tmp_path / source)
     torch.manual_seed(0)
     weights = tmp_path / f"{arch}.pth"
-    torch.save(ARCHES[arch].build({"arch_kwargs": kwargs}).state_dict(), weights)
+    torch.save(arch_adapter.build(arch, {"arch_kwargs": kwargs}, tmp_path).state_dict(), weights)
     m = mf.Manifest(id=f"unblur_motion/{arch}@0.0.1", adapter="torch_arch", scale=1, license={"name": "test"},
                     files=[], config={"arch": arch, "weights": weights.name, "dtype": "fp32", "context": 16,
                                       "arch_kwargs": kwargs})

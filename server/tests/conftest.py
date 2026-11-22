@@ -14,6 +14,12 @@ from painite_server.app import create_app
 from painite_server.config import Settings
 
 
+@pytest.fixture(autouse=True)
+def no_model_mirror(monkeypatch):
+    """Tests install models from file:// URLs only, never the network mirror."""
+    monkeypatch.setenv("PAINITE_MODEL_MIRROR", "")
+
+
 def srgb_icc() -> bytes:
     profile = ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB"))
     return profile.tobytes()

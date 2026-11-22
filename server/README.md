@@ -12,7 +12,7 @@ restoration of faces 128 to 1024 px, [bench/FACE_BAKEOFF.md](../bench/FACE_BAKEO
 ([bench/UNBLUR.md](../bench/UNBLUR.md)) has two operations: `unblur_motion/stripformer-realblurj`
 for camera shake and `unblur_focus/lakdnet-defocus-lfdpdd-s` for missed focus. They run through the
 `torch_arch` adapter with network code vendored in `painite_server/models/arches/` (Stripformer:
-non-commercial license; LaKDNet: AGPL-3.0). Install them with `models pull --all --accept-license`.
+non-commercial license; LaKDNet: AGPL-3.0). Install them with `models pull --all --accept-license`; the vendored network code is not shipped and is downloaded with the weights ([third_party/arches](third_party/arches/README.md)).
 Until they are installed, placeholder models (`denoise/identity`, `sharpen/identity`,
 `unblur_motion/identity`, `unblur_focus/identity`, `upscale2x/bilinear`, `face/identity`) answer instead.
 
@@ -31,7 +31,15 @@ painite-server token create --name dev      # prints the pnt_… secret once (st
 painite-server serve --port 8443
 ```
 
-## Run on DGX Spark (Docker)
+## Install on DGX Spark (release)
+
+From a release, unpack `painite-server_<version>.tar.gz` and run `sudo ./install.sh`
+(`--help` for options). It builds the image, runs `admin init`, pulls the models
+after asking about their licenses, installs `/usr/local/bin/painite-server` (the
+admin commands below, run in the image) and the systemd service. The user guide
+covers it: https://yuanlin2004.github.io/PAINITE/install.html
+
+## Run on DGX Spark (Docker, by hand)
 
 ```sh
 docker build -t painite-server:latest server/
@@ -65,6 +73,11 @@ ps-admin models pull --all --accept-license      # or one ID, e.g. denoise/scune
 ps-admin models verify
 sudo systemctl restart painite-server
 ```
+
+`models pull` downloads each file from the project's mirror (the `models-v1`
+release, filled by `.github/workflows/mirror-models.yml`) and falls back to the
+upstream URL; both are checked against the manifest's SHA-256. Set
+`PAINITE_MODEL_MIRROR` to another base URL, or to an empty string for upstream only.
 
 Installed models live in `/var/lib/painite/models/<operation>/<name>@<version>/`,
 so several versions can be installed side by side and clients can pin one. A

@@ -1,0 +1,37 @@
+{
+  "denoise": {
+    "title": "Denoise",
+    "meta": "Real ISO 12800 photo · denoise, strength 1.0",
+    "caption": "Grain from a very high ISO setting is removed while the strawberry seeds and leaf edges stay. Photo: Alexis Jazz, CC0."
+  },
+  "sharpen": {
+    "title": "Sharpen",
+    "meta": "Softened photo · sharpen, strength 0.8",
+    "caption": "Restores crisp edges to a soft photo without halos. The softness here was simulated with a slight blur. Photo: Jebulon, CC0."
+  },
+  "unblur_motion": {
+    "title": "Unblur: Motion",
+    "meta": "Camera shake · unblur_motion",
+    "caption": "Removes a smear in one direction, from camera shake or a moving subject. The shake here was simulated (21 px). Photo: Jebulon, CC0."
+  },
+  "unblur_focus": {
+    "title": "Unblur: Focus",
+    "meta": "Missed focus · unblur_focus",
+    "caption": "Recovers a photo that is evenly soft because the focus missed. The defocus here was simulated (7 px). Photo: Bernard Gagnon, CC0."
+  },
+  "face": {
+    "title": "Face",
+    "meta": "1927 magazine scan · face, strength 1.0 · shown at 2×",
+    "caption": "Restores faces it detects (128 px or larger) and leaves the rest of the photo alone. Real 1927 print scan. Photo: Harris &amp; Ewing, public domain."
+  },
+  "upscale2x": {
+    "title": "Upscale 2×",
+    "meta": "800 px photo enlarged to 1600 px · upscale2x",
+    "caption": "Doubles the width and height with real detail. Before is a standard (bicubic) enlargement of the same crop. Photo: Wilfredor, CC0."
+  },
+  "pipeline": {
+    "title": "Several steps at once",
+    "meta": "Noisy, soft, small · denoise 0.6 → sharpen 0.3 → upscale 2×",
+    "caption": "Up to four steps run in order in one pass on the server. Before is a bicubic enlargement. Noise, blur and size were simulated. Photo: Wilfredor, CC0."
+  }
+}

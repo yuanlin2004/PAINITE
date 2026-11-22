@@ -1,0 +1,57 @@
+title: Command line
+description: Enhance single photos or whole folders with the painite command on macOS and Linux.
+---
+<div class="prose">
+<p class="eyebrow">Command line</p>
+<h1>Using the <code>painite</code> command</h1>
+<p class="lede">Enhance one photo or a whole batch from the terminal on macOS or Linux. Same server, same models and same results as the Mac app.</p>
+<p>First, install it and connect it to your server. See <a href="install.html#cli">Install the command line tool</a>.</p>
+
+<h2>Enhance photos</h2>
+<pre><code>painite enhance --op denoise -o clean.jpg noisy.jpg</code></pre>
+<p><code>--op</code> picks the enhancement: <code>denoise</code>, <code>sharpen</code>, <code>unblur_motion</code>, <code>unblur_focus</code>, <code>face</code> or <code>upscale2x</code>. <code>-o</code> is the output file or folder. See <a href="enhancements.html">Enhancements</a> for what each one does.</p>
+
+<h3>Strength</h3>
+<pre><code>painite enhance --op denoise --strength 0.7 -o clean.jpg noisy.jpg</code></pre>
+<p>Strength goes from 0 (no change) to 1 (full effect). Defaults: 0.5 for denoise, sharpen and face, 1.0 for unblur. Upscale has no strength.</p>
+
+<h3>Several steps in one pass</h3>
+<pre><code>painite enhance --op denoise:0.6,sharpen:0.3,upscale2x -o out/ IMG_0412.tif</code></pre>
+<p>A comma-separated list runs the steps in order in one server job, with one upload and one download. <code>op:strength</code> sets a step's strength. Use up to four steps, with at most one <code>upscale2x</code>.</p>
+
+<h3>Batches</h3>
+<pre><code>painite enhance --op face -o restored/ scans/*.jpg
+painite enhance --op denoise --jobs 8 -o out/ ~/Pictures/Night/*.tif</code></pre>
+<p>With several photos, or when <code>-o</code> is a folder (or ends in <code>/</code>), each result keeps its file name inside that folder. Four photos are processed at once by default; change it with <code>--jobs</code>.</p>
+
+<h3>Output format</h3>
+<pre><code>painite enhance --op upscale2x --format tiff -o big/ small.jpg</code></pre>
+<p>Results keep the input's format unless you pass <code>--format jpeg</code> or <code>--format tiff</code>. Existing files are not replaced unless you add <code>--overwrite</code>.</p>
+
+<h2>Safe by design</h2>
+<ul>
+  <li>Everything is checked before anything is uploaded: missing files, unsupported formats, two inputs that would write the same output, and existing outputs. Any problem stops the run before it starts.</li>
+  <li>Results are written to a temporary file, checked against the server's SHA-256 and then renamed into place. A failure never leaves a partial file or damages an existing one, and your originals are never changed.</li>
+  <li>Photos the server already has are not uploaded again. Failed requests are retried, and downloads resume after a dropped connection.</li>
+</ul>
+
+<h2>Scripting</h2>
+<p><code>--json</code> prints one result per input on stdout, in argument order, with <code>input</code>, <code>output</code>, <code>status</code> (<code>succeeded</code>, <code>failed</code>, <code>invalid</code>, <code>not_run</code>), any <code>error.code</code>, and timings. Progress goes to stderr.</p>
+<p>Exit codes: <code>0</code> all succeeded, <code>1</code> at least one photo failed (successful results are kept), <code>2</code> the command was invalid and nothing was submitted.</p>
+
+<h2>Other commands</h2>
+<div class="table-wrap">
+<table>
+  <tbody>
+    <tr><td><code>painite status</code></td><td>Checks the server and lists its operations and models. Add <code>--json</code> for scripts.</td></tr>
+    <tr><td><code>painite trust --fingerprint SHA256:…</code></td><td>Trusts your server's private certificate after checking its fingerprint.</td></tr>
+    <tr><td><code>painite config set|get|show</code></td><td>Server address (<code>endpoint</code>), <code>token</code> and CA file.</td></tr>
+    <tr><td><code>painite version</code></td><td>Prints the version and a link to this guide.</td></tr>
+    <tr><td><code>painite &lt;command&gt; -h</code></td><td>All flags for a command.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>Settings</h2>
+<p>Settings are stored in <code>~/.config/painite/config.json</code> on Linux and <code>~/Library/Application Support/painite/config.json</code> on macOS, shared with the Mac app. <code>PAINITE_ENDPOINT</code>, <code>PAINITE_TOKEN</code> and <code>PAINITE_CA_FILE</code> override the file, and <code>--endpoint</code>, <code>--token</code> and <code>--ca-file</code> override both. <code>PAINITE_CONFIG</code> points to a different settings file.</p>
+</div>
