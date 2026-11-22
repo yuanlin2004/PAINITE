@@ -276,3 +276,36 @@ parquet), and diffusers plus pytorch-lightning (OSDFace).
   in particular for skin texture at 256–768 px faces with s = 0.5.
 - Possible later modes: PMRF for heavy damage or old photos (slow), and a max_face fade instead of
   a hard cutoff.
+
+## Server end-to-end check (2026-11-22)
+
+I built the server image from this branch (commit 7f26e3b) and ran it as a separate container
+on spark1. `models pull face/gpen-bfr-1024@1.0.0` downloaded both files from their manifest
+URLs (ModelScope and GitHub) and their sha256s verified. Then I ran the Go CLI against it:
+
+- `painite enhance --op face` on 7 photos:
+  - Faces between 128 and 1024 px are restored (11 of the 14 detected in the 24 MP team photo).
+  - Faces outside that range are left alone. The big-face portrait and the half-body/event
+    shots with 1150–2750 px face crops come back pixel-identical, by policy.
+  - The photo with no faces comes back bit-identical.
+  - On the team photo, 0 pixels change outside the face paste boxes.
+- **EXIF orientation:** the team photo stored rotated (orientation 6) gives the same output as
+  the upright copy, once both are turned upright (max difference 2 of 255, mean 0.003). The
+  output keeps the stored pixels and the orientation tag.
+- **Pipeline:** `--op denoise,face` runs both steps in one job.
+- **Preview == export:** over the API with TIFF output, previews over faces are bit-identical to
+  the same region of the full export. I checked 8 cases: face and denoise+face, on the upright
+  and the EXIF-rotated photo, with tile-aligned and unaligned regions (including a 257×129 region
+  touching one face).
+- **Server tests** in the image: 78 passed, 8 skipped.
+- **Job timings (inference only):**
+  - 1 face (17.6 MP): 0.38 s.
+  - 6 faces (13.7 MP): 0.80 s.
+  - 11 faces (24 MP): 1.8–3.5 s.
+  - Preview over one or two faces: 1.3–1.9 s.
+
+  Another bench job shared the GPU during these runs, so treat the timings as upper bounds.
+  Encoding a 24 MP deflate TIFF takes about 5 s; JPEG takes about 0.5 s.
+
+[server_e2e_group.png](results/face/server_e2e_group.png) shows two faces from the team photo.
+Columns: input, `--op face` (strength 0.5), `--op denoise,face`.
