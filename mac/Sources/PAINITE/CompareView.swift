@@ -105,6 +105,9 @@ final class CompareView: NSView {
     private var faces: [FaceInfo] = []
     private var faceLayers: [CAShapeLayer] = []
 
+    /// Largest zoom, as image pixels per screen pixel (800%).
+    static let maxZoom: CGFloat = 8
+
     static let accent = NSColor(srgbRed: 0xF5 / 255, green: 0x8A / 255, blue: 0x3D / 255, alpha: 1)
 
     override init(frame: NSRect) {
@@ -539,8 +542,14 @@ final class CompareView: NSView {
     /// Zooms keeping the image point under `anchor` (pane coordinates) fixed.
     private func setScale(_ newScale: CGFloat, anchor: CGPoint?) {
         guard imageSize.width > 0 else { return }
-        let minScale = min(fitScale, 0.05 / backingScale)
-        let maxScale = 32 / backingScale
+        // Zoom out no further than Fit (or 100% for a photo smaller than the window),
+        // and in no further than 800%.
+        let minScale = min(fitScale, 1 / backingScale)
+        let maxScale = CompareView.maxZoom / backingScale
+        if newScale <= fitScale + 0.0001, fitScale <= 1 / backingScale {
+            fit()
+            return
+        }
         let s = min(max(newScale, minScale), maxScale)
         let pane = paneSize
         let a = anchor ?? CGPoint(x: pane.width / 2, y: pane.height / 2)
