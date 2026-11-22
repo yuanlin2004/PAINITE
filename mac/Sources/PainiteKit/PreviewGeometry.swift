@@ -8,16 +8,25 @@ public enum PreviewGeometry {
     /// returns in seconds; when zoomed out further, the preview covers the middle
     /// of the view and the rest of the "after" pane shows the original, dimmed.
     public static func maxSide(for operation: Operation) -> Int {
-        operation.scale == 2 ? 1024 : 2048
+        maxSide(scale: operation.scale)
+    }
+
+    /// Same, for a pipeline whose output is `scale` times the input on each axis.
+    public static func maxSide(scale: Int) -> Int {
+        scale >= 2 ? 1024 : 2048
     }
 
     /// The region to request for a view showing `visible` (displayed source pixels)
     /// of an image of `imageSize`. Returns nil when nothing of the image is visible.
     public static func requestRegion(visible: CGRect, imageSize: CGSize, operation: Operation) -> Region? {
+        requestRegion(visible: visible, imageSize: imageSize, scale: operation.scale)
+    }
+
+    public static func requestRegion(visible: CGRect, imageSize: CGSize, scale: Int) -> Region? {
         let bounds = CGRect(origin: .zero, size: imageSize)
         var r = visible.intersection(bounds)
         guard !r.isNull, r.width >= 1, r.height >= 1 else { return nil }
-        let cap = CGFloat(maxSide(for: operation))
+        let cap = CGFloat(maxSide(scale: scale))
         if r.width > cap {
             r.origin.x = r.midX - cap / 2
             r.size.width = cap

@@ -42,6 +42,7 @@ permission the first time the app connects.
 
 | Area | Behavior |
 | --- | --- |
+| Steps | The sidebar holds up to 4 steps (Denoise, Sharpen, Upscale 2×) that run top to bottom as one server job. Toggle, reorder, or remove each step; Upscale can appear once and is added last. |
 | Open | Finder, File › Open, drag onto the welcome window, or Lightroom **Edit in**. JPEG and TIFF only, as the server supports. |
 | Upload | Starts as soon as the photo opens. Content-addressed by SHA-256: `HEAD /sources/{sha}` first, so a photo the server already has is not sent again. If the server dropped it, the app uploads again and retries the job. |
 | Preview | The visible part of the photo, at most 2048 px square (1024 for upscale), requested about 1/3 s after zooming, panning, or changing a setting. Each request supersedes the previous one; stale results are discarded. Lossless TIFF, so compression doesn't hide noise. The last six previews are cached. |

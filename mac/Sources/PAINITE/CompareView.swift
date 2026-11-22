@@ -18,6 +18,10 @@ final class CompareView: NSView {
     private var previewRegion: CGRect = .zero
     private var imageSize: CGSize = .zero
     private var box: CGRect?
+    /// With no steps the enhanced side is just the original, shown undimmed.
+    var enhancedIsOriginal = false {
+        didSet { if oldValue != enhancedIsOriginal { applyTransform(notify: false) } }
+    }
     private var boxState: BoxState = .pending
 
     enum BoxState {
@@ -177,7 +181,7 @@ final class CompareView: NSView {
                 l.transform = CATransform3DMakeScale(scale, scale, 1)
                 l.magnificationFilter = pixelZoom > 1.01 ? .nearest : .linear
             }
-            rightBase.opacity = 0.35
+            rightBase.opacity = Float(enhancedIsOriginal ? 1 : 0.35)
             if let previewImage, previewRegion.width > 0 {
                 let pw = CGFloat(previewImage.width)
                 let ph = CGFloat(previewImage.height)
@@ -319,6 +323,8 @@ struct CompareViewRepresentable: NSViewRepresentable {
 
     func updateNSView(_ view: CompareView, context: Context) {
         view.setOriginal(model.image, size: model.imageSize)
-        view.setPreview(model.preview?.image, region: model.preview?.region)
+        let noSteps = model.signature.items.isEmpty
+        view.enhancedIsOriginal = noSteps
+        view.setPreview(noSteps ? nil : model.preview?.image, region: noSteps ? nil : model.preview?.region)
     }
 }

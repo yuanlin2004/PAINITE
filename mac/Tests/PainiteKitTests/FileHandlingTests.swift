@@ -137,3 +137,46 @@ final class TileGridTests: XCTestCase {
         }
     }
 }
+
+final class RecipeTests: XCTestCase {
+    func testSignatureSkipsDisabledAndRoundsStrength() {
+        let steps = [RecipeStep(operation: .denoise, strength: 0.604), RecipeStep(operation: .sharpen, enabled: false),
+                     RecipeStep(operation: .upscale2x, strength: 0.9)]
+        let sig = Recipe.signature(steps) { $0 != .upscale2x }
+        XCTAssertEqual(sig.items.map(\.operation), [.denoise, .upscale2x])
+        XCTAssertEqual(sig.items[0].strength, 0.6)
+        XCTAssertNil(sig.items[1].strength)
+        XCTAssertEqual(Recipe.scale(sig), 2)
+        XCTAssertEqual(Recipe.label(sig), "Denoise 60 → Upscale 2×")
+    }
+
+    func testCanAdd() {
+        var steps = [RecipeStep(operation: .upscale2x)]
+        XCTAssertFalse(Recipe.canAdd(.upscale2x, to: steps))
+        XCTAssertTrue(Recipe.canAdd(.denoise, to: steps))
+        steps += [RecipeStep(operation: .denoise), RecipeStep(operation: .sharpen), RecipeStep(operation: .denoise)]
+        XCTAssertFalse(Recipe.canAdd(.sharpen, to: steps))
+    }
+
+    func testOneStepIsSentAsPlainOperation() throws {
+        let sig = Recipe.signature([RecipeStep(operation: .sharpen, strength: 0.3)]) { _ in true }
+        let one = JobRequest(sourceId: "sha256:x", kind: .full, steps: Recipe.jobSteps(sig, models: ["m"]),
+                             region: nil, format: nil)
+        XCTAssertEqual(one.operation, .sharpen)
+        XCTAssertNil(one.steps)
+        let obj = try JSONSerialization.jsonObject(with: APIClient.encoder.encode(one)) as! [String: Any]
+        XCTAssertEqual(Set(obj.keys), ["source_id", "kind", "operation", "params", "model"])
+
+        let two = Recipe.signature([RecipeStep(operation: .denoise, strength: 0.6), RecipeStep(operation: .upscale2x)]) {
+            $0 != .upscale2x
+        }
+        let req = JobRequest(sourceId: "sha256:x", kind: .preview, steps: Recipe.jobSteps(two, models: []),
+                             region: Region(x: 0, y: 0, w: 1, h: 1), format: .tiff)
+        let obj2 = try JSONSerialization.jsonObject(with: APIClient.encoder.encode(req)) as! [String: Any]
+        XCTAssertEqual(Set(obj2.keys), ["source_id", "kind", "steps", "region", "output"])
+        let steps = obj2["steps"] as! [[String: Any]]
+        XCTAssertEqual(steps[0]["operation"] as? String, "denoise")
+        XCTAssertEqual((steps[0]["params"] as? [String: Any])?["strength"] as? Double, 0.6)
+        XCTAssertNil(steps[1]["params"])
+    }
+}

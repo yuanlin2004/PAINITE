@@ -134,11 +134,25 @@ public struct JobRequest: Codable, Sendable, Equatable {
         public var jpegQuality: Int?
     }
 
+    /// One operation of a pipeline.
+    public struct Step: Codable, Sendable, Equatable {
+        public var operation: Operation
+        public var params: Params?
+        public var model: String?
+
+        public init(operation: Operation, strength: Double?, model: String?) {
+            self.operation = operation
+            params = strength.map { Params(strength: $0) }
+            self.model = model
+        }
+    }
+
     public var sourceId: String
     public var kind: JobKind
-    public var operation: Operation
+    public var operation: Operation?
     public var params: Params?
     public var model: String?
+    public var steps: [Step]?
     public var region: Region?
     public var output: Output?
 
@@ -154,6 +168,31 @@ public struct JobRequest: Codable, Sendable, Equatable {
             output = Output(format: format, jpegQuality: jpegQuality)
         }
     }
+
+    /// A job for `steps` in order. One step is sent as a plain operation, so it
+    /// also works with servers that predate pipelines.
+    public init(sourceId: String, kind: JobKind, steps: [Step], region: Region?, format: ImageFormat?,
+                jpegQuality: Int? = nil) {
+        if steps.count == 1 {
+            let s = steps[0]
+            self.init(sourceId: sourceId, kind: kind, operation: s.operation, strength: s.params?.strength,
+                      model: s.model, region: region, format: format, jpegQuality: jpegQuality)
+            return
+        }
+        self.sourceId = sourceId
+        self.kind = kind
+        self.steps = steps
+        self.region = region
+        if format != nil || jpegQuality != nil {
+            output = Output(format: format, jpegQuality: jpegQuality)
+        }
+    }
+}
+
+public struct JobStep: Codable, Sendable, Equatable {
+    public var operation: String
+    public var model: String
+    public var params: [String: Double]?
 }
 
 public enum JobState: String, Codable, Sendable {
@@ -185,6 +224,8 @@ public struct Job: Codable, Sendable, Equatable {
     public var model: String
     public var sourceId: String
     public var params: [String: Double]?
+    /// Every step with its resolved model (one entry for a single operation).
+    public var steps: [JobStep]?
     public var region: Region?
     public var progress: Double?
     public var result: Result?

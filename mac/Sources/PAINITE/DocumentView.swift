@@ -24,7 +24,7 @@ struct DocumentView: View {
             }
             Divider()
             sidebar
-                .frame(width: 280)
+                .frame(width: 300)
         }
         .frame(minWidth: 900, minHeight: 560)
     }
@@ -113,40 +113,29 @@ struct DocumentView: View {
 
     private var enhanceSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Enhancement").font(.headline)
-            Picker("Operation", selection: $model.operation) {
-                ForEach(PainiteKit.Operation.allCases) { op in
-                    Text(op.title).tag(op)
-                }
+            HStack {
+                Text("Steps").font(.headline)
+                Spacer()
+                addStepMenu
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .disabled(model.export.isRunning)
-
-            if model.operationHasStrength {
-                HStack {
-                    Text("Strength")
-                    Slider(value: $model.strength, in: model.strengthRange)
-                    Text("\(Int((model.strength * 100).rounded()))")
-                        .monospacedDigit()
-                        .frame(width: 30, alignment: .trailing)
-                }
-                .disabled(model.export.isRunning)
-            } else {
-                Text("Doubles the width and height.").font(.callout).foregroundStyle(.secondary)
+            if model.steps.isEmpty {
+                Text("Add a step to enhance the photo. Steps run top to bottom in one pass on the server.")
+                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
-
-            if let modelID = model.preview?.model ?? server.capabilities?.operation(model.operation)?.defaultModel {
-                HStack(spacing: 6) {
-                    Text(modelID).font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
-                    if server.capabilities?.model(modelID)?.placeholder == true {
-                        Text("placeholder")
-                            .font(.caption2.weight(.semibold))
-                            .padding(.horizontal, 5).padding(.vertical, 1)
-                            .background(Capsule().fill(Color.orange.opacity(0.25)))
-                            .help("A stand-in model for testing. Denoise and sharpen return the original; upscale is a plain resize.")
+            ScrollView {
+                VStack(spacing: 8) {
+                    ForEach(Array(model.steps.enumerated()), id: \.element.id) { index, step in
+                        StepCard(model: model, step: step, index: index, count: model.steps.count,
+                                 enabledIndex: enabledIndex(of: step))
                     }
                 }
+            }
+            .frame(maxHeight: 360)
+            .fixedSize(horizontal: false, vertical: true)
+
+            if model.signature.items.count > 1 {
+                Text(Recipe.label(model.signature))
+                    .font(.caption).foregroundStyle(.secondary).lineLimit(2)
             }
 
             if case .failed(let msg) = model.previewState {
@@ -156,6 +145,28 @@ struct DocumentView: View {
                 }
             }
         }
+        .disabled(model.export.isRunning)
+    }
+
+    private var addStepMenu: some View {
+        Menu {
+            ForEach(PainiteKit.Operation.allCases) { op in
+                Button(op.title) { model.addStep(op) }
+                    .disabled(!model.canAdd(op))
+            }
+        } label: {
+            Label("Add Step", systemImage: "plus")
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .disabled(model.steps.count >= Recipe.maxSteps)
+        .help(model.steps.count >= Recipe.maxSteps ? "Up to \(Recipe.maxSteps) steps" : "Add an enhancement step")
+    }
+
+    /// Position among enabled steps, which is how the server numbers them.
+    private func enabledIndex(of step: RecipeStep) -> Int? {
+        guard step.enabled else { return nil }
+        return model.steps.filter(\.enabled).firstIndex { $0.id == step.id }
     }
 
     private var exportSection: some View {
@@ -254,5 +265,80 @@ struct DocumentView: View {
         case .failed(let msg):
             Text(msg).fixedSize(horizontal: false, vertical: true)
         }
+    }
+}
+
+/// One step: operation, strength, model, and controls to toggle, reorder, or remove it.
+struct StepCard: View {
+    @ObservedObject var model: DocumentModel
+    @ObservedObject var server = ServerStore.shared
+    let step: RecipeStep
+    let index: Int
+    let count: Int
+    let enabledIndex: Int?
+
+    private var binding: Binding<RecipeStep> {
+        Binding(
+            get: { model.steps.first { $0.id == step.id } ?? step },
+            set: { new in
+                if let i = model.steps.firstIndex(where: { $0.id == step.id }) { model.steps[i] = new }
+            })
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Text("\(index + 1)")
+                    .font(.caption.weight(.bold).monospacedDigit())
+                    .frame(width: 18, height: 18)
+                    .background(Circle().fill(step.enabled ? Color.accentColor.opacity(0.25) : Color.secondary.opacity(0.15)))
+                Toggle(isOn: binding.enabled) {
+                    Text(step.operation.title).font(.callout.weight(.semibold))
+                }
+                .toggleStyle(.checkbox)
+                .help(step.enabled ? "Turn this step off without removing it" : "Turn this step on")
+                Spacer(minLength: 4)
+                Button { model.moveStep(step.id, by: -1) } label: { Image(systemName: "chevron.up") }
+                    .disabled(index == 0).help("Move up")
+                Button { model.moveStep(step.id, by: 1) } label: { Image(systemName: "chevron.down") }
+                    .disabled(index == count - 1).help("Move down")
+                Button { model.removeStep(step.id) } label: { Image(systemName: "xmark") }
+                    .help("Remove step")
+            }
+            .buttonStyle(.borderless)
+
+            if model.takesStrength(step.operation) {
+                HStack {
+                    Slider(value: binding.strength, in: model.strengthRange(step.operation)) {
+                        Text("Strength")
+                    }
+                    .controlSize(.small)
+                    Text("\(Int((step.strength * 100).rounded()))")
+                        .font(.callout.monospacedDigit())
+                        .frame(width: 28, alignment: .trailing)
+                }
+                .disabled(!step.enabled)
+            } else if step.operation.scale > 1 {
+                Text("Doubles the width and height.").font(.caption).foregroundStyle(.secondary)
+            }
+
+            if let i = enabledIndex, let id = model.modelID(forEnabledStep: i) {
+                HStack(spacing: 6) {
+                    Text(id).font(.caption.monospaced()).foregroundStyle(.secondary)
+                        .lineLimit(1).truncationMode(.middle)
+                    if server.capabilities?.model(id)?.placeholder == true {
+                        Text("placeholder")
+                            .font(.caption2.weight(.semibold))
+                            .padding(.horizontal, 5).padding(.vertical, 1)
+                            .background(Capsule().fill(Color.orange.opacity(0.25)))
+                            .help("A stand-in model for testing; it does not really enhance.")
+                    }
+                }
+            }
+        }
+        .padding(8)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color(nsColor: .controlBackgroundColor)))
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.secondary.opacity(0.2)))
+        .opacity(step.enabled ? 1 : 0.6)
     }
 }
