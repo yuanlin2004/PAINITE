@@ -72,7 +72,11 @@ def fake_face_model(face_points=FACE_DISPLAYED, **config):
 
         def detect(self, small, full_w, full_h):
             self.detected_on.append((small.shape, full_w, full_h))
-            return [(0.99, face_points.copy()), (0.98, face_points + [400.0, 0.0])]
+            def box(p):
+                return np.array([p[:, 0].min() - 15, p[:, 1].min() - 25, p[:, 0].max() + 15, p[:, 1].max() + 15])
+
+            pts = [face_points.copy(), face_points + [400.0, 0.0]]
+            return [(0.99, pts[0], box(pts[0])), (0.98, pts[1], box(pts[1]))]
 
         def _restore(self, crop):
             return 1 - crop  # easy to spot
@@ -102,6 +106,7 @@ def render(tmp_path: Path, src: Path, model, region: Rect | None, strength=1.0, 
     steps = [pipeline.Step(m, {"strength": strength} if m is model else {}) for m in (before or []) + [model]]
     out = pipeline.run(src, steps, region, {"format": "tiff"}, tmp_path / "work",
                        tmp_path / "results", job, 64, 16, 10**9, lambda p: None, lambda: False)
+    render.last = out
     return pyvips.Image.new_from_file(str(out.path)).numpy()
 
 
@@ -206,3 +211,32 @@ def test_gpen_restorer_loads_from_a_plain_state_dict_and_is_deterministic(tmp_pa
     x = torch.rand(1, 3, 64, 64)
     a, b = m._restore(x), m._restore(x)
     assert a.shape == x.shape and torch.equal(a, b)
+
+
+def test_job_reports_faces_with_status_in_displayed_pixels(tmp_path):
+    src = make_photo(tmp_path / "a.tif", 640, 300)
+    render(tmp_path, src, fake_face_model(max_face=200), Rect(0, 0, 64, 64))
+    faces = render.last.info["faces"]
+    # Both faces are reported even though the preview region touches neither.
+    assert [f["status"] for f in faces] == ["enhanced", "enhanced"]
+    assert faces[0]["box"] == {"x": 105, "y": 85, "w": 70, "h": 82}
+    assert 150 < faces[0]["size"] < 175
+    render(tmp_path, src, fake_face_model(max_face=100), None, job="large")
+    assert {f["status"] for f in render.last.info["faces"]} == {"too_large"}
+    render(tmp_path, src, fake_face_model(min_face=300), None, job="small")
+    assert {f["status"] for f in render.last.info["faces"]} == {"too_small"}
+
+
+def test_rotated_face_boxes_are_reported_upright(tmp_path):
+    src = make_photo(tmp_path / "r.tif", 300, 640, orientation=6)
+    render(tmp_path, src, fake_face_model(), None)
+    # The fake detector answered in displayed pixels; the report is displayed pixels too.
+    assert render.last.info["faces"][0]["box"] == {"x": 105, "y": 85, "w": 70, "h": 82}
+
+
+def test_jobs_without_a_face_step_report_no_faces(tmp_path):
+    from painite_server.models import IdentityModel
+
+    src = make_photo(tmp_path / "a.tif", 640, 300)
+    render(tmp_path, src, IdentityModel(id="denoise/identity@0.1.0", operation="denoise", version="0.1.0"), None)
+    assert render.last.info == {}

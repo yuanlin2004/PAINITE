@@ -145,6 +145,7 @@ class Worker:
             result_format=out.format,
             result_width=out.width,
             result_height=out.height,
+            info=dumps(out.info) if out.info else None,
             result_expires_at=now + self.settings.result_retention_s,
         )
         self.store.touch_source(job["owner"], job["source_sha"])

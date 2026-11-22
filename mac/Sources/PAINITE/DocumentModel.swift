@@ -40,6 +40,8 @@ final class DocumentModel: ObservableObject {
         /// The model each step used, in order.
         let models: [String]
         let serverMs: Double?
+        /// Faces a face step found in the whole image (empty without one).
+        let faces: [FaceInfo]
     }
 
     let url: URL
@@ -57,6 +59,8 @@ final class DocumentModel: ObservableObject {
         didSet { if oldValue != steps { settingsChanged() } }
     }
     @Published var exportFormat: ImageFormat = .tiff
+    /// Outline the faces a face step found: enhanced ones solid, skipped ones dashed.
+    @Published var showFaces = true
 
     @Published private(set) var upload: UploadState = .idle
     @Published private(set) var preview: Preview? {
@@ -411,7 +415,8 @@ final class DocumentModel: ObservableObject {
         let loaded = try await Task.detached(priority: .userInitiated) { try ImageLoader.load(tmp) }.value
         previewJobID = nil
         return Preview(image: loaded.image, region: done.region ?? region, signature: sig,
-                       models: done.steps?.map(\.model) ?? [done.model], serverMs: done.timingsMs?["total"])
+                       models: done.steps?.map(\.model) ?? [done.model], serverMs: done.timingsMs?["total"],
+                       faces: done.faces ?? [])
     }
 
     private func cancelServerPreview() {

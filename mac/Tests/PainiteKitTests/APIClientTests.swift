@@ -72,6 +72,19 @@ final class APIClientTests: XCTestCase {
         XCTAssertNil(job.result)
     }
 
+    func testDecodesFaces() async throws {
+        let json = APIClientTests.jobJSON(state: "completed").replacingOccurrences(
+            of: #""timings_ms":{}"#,
+            with: #""timings_ms":{},"faces":[{"box":{"x":10,"y":20,"w":30,"h":40},"status":"enhanced","size":300,"score":0.99},{"box":{"x":1,"y":2,"w":3,"h":4},"status":"too_small","size":60}]"#)
+        StubProtocol.handler = { _, _ in (200, [:], Data(json.utf8)) }
+        let job = try await client.job(id: "job_01")
+        XCTAssertEqual(job.faces?.map(\.status), [.enhanced, .tooSmall])
+        XCTAssertEqual(job.faces?.first?.box, Region(x: 10, y: 20, w: 30, h: 40))
+        StubProtocol.handler = { _, _ in (200, [:], Data(APIClientTests.jobJSON(state: "completed").utf8)) }
+        let plain = try await client.job(id: "job_01")
+        XCTAssertNil(plain.faces)
+    }
+
     func testErrorEnvelopeKeepsStableCode() async {
         StubProtocol.handler = { _, _ in
             (409, [:], Data(#"{"error":{"code":"model_unavailable","message":"model x is not installed"}}"#.utf8))

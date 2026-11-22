@@ -73,6 +73,9 @@ final class CompareView: NSView {
     private let outlineLeft = CALayer()
     /// The area being drawn or moved, in both panes.
     private let bands = [CALayer(), CALayer()]
+    /// Face outlines (from a face step), in both panes.
+    private var faces: [FaceInfo] = []
+    private var faceLayers: [CAShapeLayer] = []
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -127,6 +130,30 @@ final class CompareView: NSView {
         rightBase.contents = image
         fitMode = true
         needsLayout = true
+    }
+
+    /// Outline faces: enhanced ones in green, faces skipped for their size dashed in orange.
+    func setFaces(_ list: [FaceInfo]) {
+        guard list != faces else { return }
+        faces = list
+        faceLayers.forEach { $0.removeFromSuperlayer() }
+        faceLayers = []
+        for face in list {
+            for pane in [leftPane, rightPane] {
+                let l = CAShapeLayer()
+                l.fillColor = nil
+                l.lineWidth = 1.5
+                if face.status == .enhanced {
+                    l.strokeColor = NSColor.systemGreen.cgColor
+                } else {
+                    l.strokeColor = NSColor.systemOrange.cgColor
+                    l.lineDashPattern = [5, 4]
+                }
+                pane.insertSublayer(l, below: outline.superlayer === pane ? outline : outlineLeft)
+                faceLayers.append(l)
+            }
+        }
+        applyTransform(notify: false)
     }
 
     func setPreview(_ image: CGImage?, region: Region?) {
@@ -248,6 +275,14 @@ final class CompareView: NSView {
             } else {
                 outline.isHidden = true
                 outlineLeft.isHidden = true
+            }
+            for (i, face) in faces.enumerated() {
+                let r = CGRect(x: face.box.x, y: face.box.y, width: face.box.w, height: face.box.h)
+                let frame = paneRect(r, origin: o)
+                for l in faceLayers[(2 * i)..<(2 * i + 2)] {
+                    l.frame = frame
+                    l.path = CGPath(rect: CGRect(origin: .zero, size: frame.size), transform: nil)
+                }
             }
             if let band = bandRect, band.width > 0 {
                 for l in bands {
@@ -479,5 +514,6 @@ struct CompareViewRepresentable: NSViewRepresentable {
         let noSteps = model.signature.items.isEmpty
         view.enhancedIsOriginal = noSteps
         view.setPreview(noSteps ? nil : model.preview?.image, region: noSteps ? nil : model.preview?.region)
+        view.setFaces(noSteps || !model.showFaces ? [] : model.preview?.faces ?? [])
     }
 }

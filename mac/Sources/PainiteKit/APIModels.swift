@@ -247,7 +247,31 @@ public struct Job: Codable, Sendable, Equatable {
     public var progress: Double?
     public var result: Result?
     public var timingsMs: [String: Double]?
+    /// Faces found by a face step (the whole image, even for a preview); nil without one.
+    public var faces: [FaceInfo]?
     public var error: ErrorBody?
+}
+
+/// A face the server detected, in displayed source pixels.
+public struct FaceInfo: Codable, Sendable, Equatable {
+    public enum Status: String, Codable, Sendable {
+        case enhanced
+        case tooSmall = "too_small"
+        case tooLarge = "too_large"
+    }
+
+    public var box: Region
+    public var status: Status
+    /// Side of the face's aligned crop in pixels; the size limits apply to it.
+    public var size: Int
+    public var score: Double?
+
+    public init(box: Region, status: Status, size: Int, score: Double? = nil) {
+        self.box = box
+        self.status = status
+        self.size = size
+        self.score = score
+    }
 }
 
 /// A failure with a stable code. Server errors carry the contract's codes;

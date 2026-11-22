@@ -293,9 +293,10 @@ class FaceModel(Model):
 
     # Detection -------------------------------------------------------------
 
-    def detect(self, small: np.ndarray, full_w: int, full_h: int) -> list[tuple[float, np.ndarray]]:
+    def detect(self, small: np.ndarray, full_w: int, full_h: int) -> list[tuple[float, np.ndarray, np.ndarray]]:
         """Faces found in `small`, a downscaled copy of a full_w x full_h image
-        (see detection_size). Returns (score, 5x2 landmarks in full-image pixels)."""
+        (see detection_size). Returns (score, 5x2 landmarks, face box x0 y0 x1 y1),
+        both in full-image pixels."""
         self.load()
         torch = _torch()
         cfg = self.config
@@ -317,8 +318,9 @@ class FaceModel(Model):
         lms = (pri[:, None, :2] + ldm.reshape(-1, 5, 2) * v0 * pri[:, None, 2:]) * [dw, dh]
         keep = _nms(boxes, conf, float(cfg.get("nms_threshold", 0.4)))
         rx, ry = full_w / dw, full_h / dh
-        # Detection pixels -> full-image pixels (pixel centers).
-        return [(float(conf[i]), (lms[i] + 0.5) * [rx, ry] - 0.5) for i in keep]
+        # Detection pixels -> full-image pixels (pixel centers for landmarks,
+        # pixel edges for the face box).
+        return [(float(conf[i]), (lms[i] + 0.5) * [rx, ry] - 0.5, boxes[i] * [rx, ry, rx, ry]) for i in keep]
 
     def detection_size(self, width: int, height: int) -> tuple[int, int]:
         """Size of the downscaled copy that detection runs on."""
@@ -344,19 +346,28 @@ class FaceModel(Model):
     def layout(self, dets, scale: int, width: int, height: int) -> list[Face]:
         """Faces in an image `scale` times the detected one (width x height),
         filtered by size, in a fixed order (top to bottom, left to right)."""
+        faces = [f for f, status in self.classify(dets, scale, width, height)
+                 if status == "enhanced" and f.box[2] > f.box[0] and f.box[3] > f.box[1]]
+        faces.sort(key=lambda f: (f.box[1], f.box[0], f.box[2], f.box[3]))
+        return faces
+
+    def classify(self, dets, scale: int, width: int, height: int) -> list[tuple[Face, str]]:
+        """Every detected face with what this model does to it: "enhanced",
+        "too_small" or "too_large" (by the size of its aligned crop)."""
         cfg = self.config
         face_size = int(cfg.get("face_size", 512))
         min_face, max_face = float(cfg.get("min_face", 24)), float(cfg.get("max_face", 0))
-        faces = []
-        for score, pts in dets:
+        out = []
+        for score, pts, *_ in dets:
             f = make_face((np.asarray(pts) + 0.5) * scale - 0.5, score, face_size, width, height)
-            if f.size < min_face or (max_face and f.size > max_face):
-                continue
-            if f.box[2] <= f.box[0] or f.box[3] <= f.box[1]:
-                continue
-            faces.append(f)
-        faces.sort(key=lambda f: (f.box[1], f.box[0], f.box[2], f.box[3]))
-        return faces
+            if f.size < min_face:
+                status = "too_small"
+            elif max_face and f.size > max_face:
+                status = "too_large"
+            else:
+                status = "enhanced"
+            out.append((f, status))
+        return out
 
     @staticmethod
     def touching(faces: list[Face], area) -> list[Face]:
