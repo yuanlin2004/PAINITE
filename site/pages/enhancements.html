@@ -22,17 +22,18 @@ description: What each PAINITE enhancement does, when to use it, and examples: d
 <p><small>Model: Real-ESRGAN 2×, then scaled back to the original size. CLI: <code>--op sharpen</code>.</small></p>
 
 <h2 id="unblur">Unblur</h2>
+<p><small>Called <strong>Deblur</strong> in the Mac app.</small></p>
 <p>Recovers photos ruined by blur. There are two kinds of blur, and each has its own model. PAINITE can't tell them apart reliably, so you choose:</p>
 <div class="grid">
   <div class="card">
     <h3>Motion</h3>
     <p>Edges are <strong>smeared in one direction</strong>, sometimes with double edges. Caused by camera shake or a subject that moved.</p>
-    <p><small>Mac: Unblur, <strong>Motion</strong>. CLI: <code>--op unblur_motion</code>.</small></p>
+    <p><small>Mac: Deblur, <strong>Motion</strong>. CLI: <code>--op unblur_motion</code>.</small></p>
   </div>
   <div class="card">
     <h3>Focus</h3>
     <p>Everything is <strong>evenly soft in every direction</strong>, and points of light become discs. Caused by missed focus.</p>
-    <p><small>Mac: Unblur, <strong>Focus</strong>. CLI: <code>--op unblur_focus</code>.</small></p>
+    <p><small>Mac: Deblur, <strong>Focus</strong>. CLI: <code>--op unblur_focus</code>.</small></p>
   </div>
 </div>
 <!--SAMPLE:unblur_motion-->
@@ -45,6 +46,7 @@ description: What each PAINITE enhancement does, when to use it, and examples: d
 </div>
 
 <h2 id="face">Face</h2>
+<p><small>Called <strong>Faces</strong> in the Mac app.</small></p>
 <p>Finds faces and restores them: eyes, skin and hair become clear and natural, while the rest of the photo is left exactly as it was. Good for old prints, small faces in group photos and soft portraits. A photo with no faces comes back unchanged.</p>
 <!--SAMPLE:face-->
 <ul>
@@ -67,8 +69,8 @@ description: What each PAINITE enhancement does, when to use it, and examples: d
   <tbody>
     <tr><td>Clean Up</td><td>Denoise 0.5</td><td>Everyday noise and JPEG artifacts</td></tr>
     <tr><td>High ISO</td><td>Denoise 0.7, Sharpen 0.25</td><td>Night, indoor and concert photos</td></tr>
-    <tr><td>Portrait</td><td>Denoise 0.5, Face 0.5</td><td>People</td></tr>
-    <tr><td>Rescue Blur</td><td>Unblur (Motion) 0.5, Sharpen 0.2</td><td>Shaky shots</td></tr>
+    <tr><td>Portrait</td><td>Denoise 0.5, Faces 0.5</td><td>People</td></tr>
+    <tr><td>Rescue Blur</td><td>Deblur (Motion) 0.5, Sharpen 0.2</td><td>Shaky shots</td></tr>
     <tr><td>Print 2×</td><td>Denoise 0.4, Sharpen 0.2, Upscale 2×</td><td>Large prints and heavy crops</td></tr>
   </tbody>
 </table>

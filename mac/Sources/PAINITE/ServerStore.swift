@@ -83,9 +83,9 @@ final class ServerStore: ObservableObject {
         return caps
     }
 
-    /// Whether any installed model is a stand-in that does not really enhance.
+    /// Whether any operation's default model is a stand-in that does not really enhance.
     var usesPlaceholderModels: Bool {
-        capabilities?.models.contains { $0.placeholder == true } ?? false
+        !(capabilities?.placeholderOperations.isEmpty ?? true)
     }
 
     var hostLabel: String {

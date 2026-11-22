@@ -20,6 +20,7 @@ description: How to enhance photos with the PAINITE Mac app: steps, presets, the
 </div>
 
 <p>First, connect the app to your server. See <a href="install.html#mac">Install the Mac app</a>.</p>
+<figure class="shot"><img src="assets/mac/faces.jpg" alt="The PAINITE window: a 1927 portrait with Before on the left, the enhanced After on the right, and Denoise and Faces steps in the inspector" loading="lazy"><figcaption>A photo open in PAINITE. Before is left of the divider, After is right. The inspector holds the steps; <strong>Show faces</strong> outlines the restored face in green.</figcaption></figure>
 
 <h2 id="open">Open a photo</h2>
 <p>Drag a photo onto the welcome window or the Dock icon, choose <strong>File › Open…</strong> (<kbd>⌘</kbd><kbd>O</kbd>), or pick one of your recent photos. PAINITE works with <strong>JPEG</strong> and <strong>TIFF</strong> files, including 16-bit TIFFs from Lightroom, up to 48 megapixels.</p>
@@ -29,13 +30,17 @@ description: How to enhance photos with the PAINITE Mac app: steps, presets, the
 <p>The inspector on the right holds the <strong>steps</strong> that run on your photo, top to bottom, in one pass. You can have up to four.</p>
 <ul>
   <li><strong>Presets:</strong> start from <em>Clean Up</em>, <em>High ISO</em>, <em>Portrait</em>, <em>Rescue Blur</em> or <em>Print 2×</em> in the preset menu. Change anything and it becomes <em>Custom</em>.</li>
-  <li><strong>Add a step</strong> with <strong>+ Add Step</strong>: Denoise, Sharpen, Unblur, Face or Upscale 2×. Upscale can be used once.</li>
+  <li><strong>Add a step</strong> with <strong>+ Add Step</strong>: Denoise, Sharpen, Deblur, Faces or Upscale 2×. Upscale can be used once.</li>
   <li><strong>Strength:</strong> drag a step's slider. The preview updates when you let go.</li>
-  <li><strong>Unblur</strong> has a <strong>Motion / Focus</strong> switch. Pick Motion when the photo is smeared in one direction (camera shake, a moving subject), and Focus when it is evenly soft (missed focus). See <a href="enhancements.html#unblur">which unblur to use</a>.</li>
+  <li><strong>Deblur</strong> has a <strong>Motion / Focus</strong> switch. Pick Motion when the photo is smeared in one direction (camera shake, a moving subject), and Focus when it is evenly soft (missed focus). See <a href="enhancements.html#unblur">which one to use</a>.</li>
   <li><strong>Reorder</strong> by dragging a step's card. Use the switch on a card to turn a step off without removing it, and the <strong>…</strong> menu to move, duplicate, solo or remove it.</li>
-  <li><strong>Faces:</strong> with a Face step, <strong>Show faces</strong> outlines each face found: green for faces it restored, dashed orange for faces too small or too large to restore.</li>
+  <li><strong>Faces:</strong> with a Faces step, <strong>Show faces</strong> outlines each face found: green for faces it restored, dashed orange for faces too small or too large to restore.</li>
 </ul>
 <p>A new photo starts with the steps you used last.</p>
+<div class="shots">
+<figure class="shot"><img src="assets/mac/deblur.jpg" alt="A shaky road sign with a Deblur step set to Motion" loading="lazy"><figcaption>Deblur with <strong>Motion</strong> on a shaky photo.</figcaption></figure>
+<figure class="shot"><img src="assets/mac/split.jpg" alt="A noisy ISO 12800 photo with the High ISO preset: Denoise and Sharpen" loading="lazy"><figcaption>The <strong>High ISO</strong> preset (Denoise, Sharpen) on an ISO 12800 photo.</figcaption></figure>
+</div>
 <p>Not sure what to use? The <a href="enhancements.html">Enhancements</a> page shows what each step does, with examples.</p>
 
 <h2 id="preview">The preview area</h2>
@@ -74,6 +79,10 @@ description: How to enhance photos with the PAINITE Mac app: steps, presets, the
   <li><p>Back in Lightroom, click <strong>Finish</strong>. The enhanced copy appears next to the original.</p></li>
 </ol>
 <p>For RAW photos, Lightroom may offer no Finish button. Use <strong>Export a Copy…</strong> instead (it suggests <code>~/Pictures/<em>name</em>-painite.tif</code>), then bring the file back with Lightroom's <strong>Select…</strong>.</p>
+
+<h2 id="about">Version and help</h2>
+<p><strong>PAINITE › About PAINITE</strong> shows the version, with links to this guide and the source code. <strong>Help › PAINITE User Guide</strong> (<kbd>⌘</kbd><kbd>?</kbd>) opens this guide.</p>
+<figure class="shot small"><img src="assets/mac/about.jpg" alt="The About PAINITE panel with User guide and Source code links" loading="lazy"><figcaption>The About panel.</figcaption></figure>
 
 <h2 id="keys">Keyboard shortcuts</h2>
 <div class="table-wrap">
