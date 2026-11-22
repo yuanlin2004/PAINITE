@@ -92,6 +92,7 @@ class Registry:
 OPERATION_PARAMS = {
     "denoise": {"strength": {"min": 0.0, "max": 1.0, "default": 0.5}},
     "sharpen": {"strength": {"min": 0.0, "max": 1.0, "default": 0.5}},
+    "unblur": {"strength": {"min": 0.0, "max": 1.0, "default": 1.0}},
     "upscale2x": {},
 }
 
@@ -119,6 +120,7 @@ def default_registry(data_dir: Path | None = None) -> Registry:
     reg = Registry()
     reg.add(IdentityModel(id="denoise/identity@0.1.0", operation="denoise", version="0.1.0", placeholder=True))
     reg.add(IdentityModel(id="sharpen/identity@0.1.0", operation="sharpen", version="0.1.0", placeholder=True))
+    reg.add(IdentityModel(id="unblur/identity@0.1.0", operation="unblur", version="0.1.0", placeholder=True))
     reg.add(BilinearUpscale2x(id="upscale2x/bilinear@0.1.0", operation="upscale2x", version="0.1.0",
                               placeholder=True))
     if data_dir is None:

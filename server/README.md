@@ -9,7 +9,7 @@ The PAINITE inference server (FastAPI). It implements the contract in
 area downscale) and `upscale2x/nomosuni-esrgan-multijpg`, each followed by a
 low-frequency color anchor. Install them with `models pull --all --accept-license`.
 Until they are installed, placeholder models (`denoise/identity`,
-`sharpen/identity`, `upscale2x/bilinear`) answer instead.
+`sharpen/identity`, `unblur/identity`, `upscale2x/bilinear`) answer instead.
 
 ## Run locally
 

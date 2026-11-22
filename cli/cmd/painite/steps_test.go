@@ -22,6 +22,10 @@ func TestParseSteps(t *testing.T) {
 			t.Errorf("%q: expected an error", bad)
 		}
 	}
+	ub, err := parseSteps("unblur:0.8,denoise", nil)
+	if err != nil || len(ub) != 2 || ub[0].Operation != "unblur" || *ub[0].Strength != 0.8 {
+		t.Fatalf("got %+v, %v", ub, err)
+	}
 	if _, err := parseSteps("upscale2x", &half); err == nil {
 		t.Error("--strength with only upscale2x should fail")
 	}
