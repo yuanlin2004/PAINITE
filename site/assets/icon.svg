@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Painite icon">
+  <defs>
+    <linearGradient id="pt-table" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFD9A0"/>
+      <stop offset="1" stop-color="#EE6A32"/>
+    </linearGradient>
+  </defs>
+  <g stroke="#FFFFFF" stroke-opacity="0.35" stroke-width="1" stroke-linejoin="round">
+    <polygon points="12,60 36,18.4 49,40.95 38,60" fill="#FFB067"/>
+    <polygon points="36,18.4 84,18.4 71,40.95 49,40.95" fill="#F58A3D"/>
+    <polygon points="84,18.4 108,60 82,60 71,40.95" fill="#E0582F"/>
+    <polygon points="36,101.6 12,60 38,60 49,79.05" fill="#C93A2C"/>
+    <polygon points="108,60 84,101.6 71,79.05 82,60" fill="#9E2430"/>
+    <polygon points="84,101.6 36,101.6 49,79.05 71,79.05" fill="#7A1A2B"/>
+    <polygon points="82,60 71,79.05 49,79.05 38,60 49,40.95 71,40.95" fill="url(#pt-table)"/>
+  </g>
+  <path d="M60 46 Q60 60 74 60 Q60 60 60 74 Q60 60 46 60 Q60 60 60 46 Z" fill="#FFFFFF"/>
+  <path d="M104 6 Q104 16 114 16 Q104 16 104 26 Q104 16 94 16 Q104 16 104 6 Z" fill="#F58A3D"/>
+</svg>

@@ -93,6 +93,30 @@ def test_pull_rejects_bad_hash_and_leaves_nothing(tmp_path):
     assert not list((data / "models").rglob("*.partial"))
 
 
+def test_pull_prefers_the_mirror_and_falls_back_to_upstream(tmp_path):
+    m = mf.Manifest.load(_write_manifest(tmp_path, "denoise/mirrored@1.0.0", "identity"))
+    f = m.files[0]
+    assert m.mirror_name(f) == "denoise.mirrored-1.0.0.w.bin"
+    mirror = tmp_path / "mirror"
+    mirror.mkdir()
+    assert mf.sources(m, f, mirror.as_uri() + "/") == [mirror.as_uri() + "/denoise.mirrored-1.0.0.w.bin", f.url]
+    assert mf.sources(m, f, "") == [f.url]
+
+    # Mirror has the file: upstream is not needed.
+    (mirror / m.mirror_name(f)).write_bytes(b"weights")
+    upstream = Path(f.url.removeprefix("file://"))
+    upstream.unlink()
+    d = mf.pull(m, tmp_path / "a", mirror=mirror.as_uri() + "/")
+    assert (d / "w.bin").read_bytes() == b"weights"
+
+    # Mirror serves the wrong bytes or nothing: upstream is used.
+    upstream.write_bytes(b"weights")
+    (mirror / m.mirror_name(f)).write_bytes(b"tampered")
+    assert (mf.pull(m, tmp_path / "b", mirror=mirror.as_uri() + "/") / "w.bin").read_bytes() == b"weights"
+    (mirror / m.mirror_name(f)).unlink()
+    assert (mf.pull(m, tmp_path / "c", mirror=mirror.as_uri() + "/") / "w.bin").read_bytes() == b"weights"
+
+
 def test_pull_rejects_unknown_adapter(tmp_path, capsys):
     man = _write_manifest(tmp_path, "denoise/future@1.0.0", "nafnet")
     assert main(["--data-dir", str(tmp_path / "d"), "models", "pull", "--manifest", str(man),

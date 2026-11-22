@@ -6,6 +6,8 @@ build-backend = "setuptools.build_meta"
 name = "painite-server"
 version = "1.0.0"
 description = "PAINITE inference server"
+license = {text = "Apache-2.0"}
+authors = [{name = "Yuan Lin"}]
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.115",
@@ -27,7 +29,7 @@ painite-server = "painite_server.__main__:main"
 include = ["painite_server*"]
 
 [tool.setuptools.package-data]
-painite_server = ["models/catalog/*", "models/arches/LICENSE-*"]
+painite_server = ["models/catalog/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
