@@ -27,6 +27,9 @@ import (
 // version is set at build time with -ldflags "-X main.version=...".
 var version = "dev"
 
+// guideURL is the user guide, published from site/ to GitHub Pages.
+const guideURL = "https://yuanlin2004.github.io/PAINITE/"
+
 const (
 	exitOK      = 0
 	exitFailed  = 1
@@ -48,6 +51,8 @@ Usage:
 Run "painite <command> -h" for a command's flags.
 
 Exit codes: 0 all succeeded, 1 any file failed, 2 invalid invocation.
+
+User guide: ` + guideURL + `
 `
 
 func main() {
@@ -69,7 +74,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	case "trust":
 		return cmdTrust(args[1:], stdout, stderr)
 	case "version", "--version":
-		fmt.Fprintf(stdout, "painite %s\n", version)
+		fmt.Fprintf(stdout, "painite %s\nCopyright 2026 Yuan Lin\nUser guide: %s\n", version, guideURL)
 		return exitOK
 	case "help", "-h", "--help":
 		fmt.Fprint(stdout, usage)
