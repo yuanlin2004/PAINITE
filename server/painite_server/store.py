@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   result_height INTEGER,
   result_expires_at REAL,
   result_deleted INTEGER NOT NULL DEFAULT 0,
+  steps TEXT,
   UNIQUE (owner, idem_key)
 );
 CREATE INDEX IF NOT EXISTS jobs_state ON jobs (state, kind, created_at);
@@ -106,6 +107,10 @@ class Store:
         self._db.execute("PRAGMA journal_mode=WAL")
         self._db.execute("PRAGMA synchronous=NORMAL")
         self._db.executescript(SCHEMA)
+        # Databases created before pipelines lack the steps column.
+        cols = {r["name"] for r in self._db.execute("PRAGMA table_info(jobs)")}
+        if "steps" not in cols:
+            self._db.execute("ALTER TABLE jobs ADD COLUMN steps TEXT")
 
     def close(self) -> None:
         with self._lock:

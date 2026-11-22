@@ -96,10 +96,11 @@ def make_photo(path: Path, width: int, height: int, orientation: int | None = No
     return path
 
 
-def render(tmp_path: Path, src: Path, model, region: Rect | None, strength=1.0, job="j") -> np.ndarray:
+def render(tmp_path: Path, src: Path, model, region: Rect | None, strength=1.0, job="j", before=None) -> np.ndarray:
     (tmp_path / "work").mkdir(exist_ok=True)
     (tmp_path / "results").mkdir(exist_ok=True)
-    out = pipeline.run(src, model, {"strength": strength}, region, {"format": "tiff"}, tmp_path / "work",
+    steps = [pipeline.Step(m, {"strength": strength} if m is model else {}) for m in (before or []) + [model]]
+    out = pipeline.run(src, steps, region, {"format": "tiff"}, tmp_path / "work",
                        tmp_path / "results", job, 64, 16, 10**9, lambda p: None, lambda: False)
     return pyvips.Image.new_from_file(str(out.path)).numpy()
 
@@ -164,3 +165,22 @@ def test_size_limits_skip_faces(tmp_path):
     src = make_photo(tmp_path / "a.tif", 640, 300)
     out = render(tmp_path, src, fake_face_model(max_face=50), None)
     np.testing.assert_array_equal(out, pyvips.Image.new_from_file(str(src)).numpy())
+
+
+@pytest.mark.parametrize("region", [Rect(64, 64, 128, 128), Rect(448, 128, 64, 64)])
+def test_face_after_upscale_in_a_pipeline_matches_export(tmp_path, region):
+    from painite_server.models import BilinearUpscale2x, IdentityModel
+
+    src = make_photo(tmp_path / "a.tif", 640, 300)
+    model = fake_face_model()
+    before = [IdentityModel(id="denoise/identity@0.1.0", operation="denoise", version="0.1.0"),
+              BilinearUpscale2x(id="upscale2x/bilinear@0.1.0", operation="upscale2x", version="0.1.0")]
+    full = render(tmp_path, src, model, None, strength=0.7, job="full", before=before)
+    part = render(tmp_path, src, model, region, strength=0.7, job="prev", before=before)
+    assert full.shape[:2] == (600, 1280)
+    r = Rect(region.x * 2, region.y * 2, region.w * 2, region.h * 2)
+    np.testing.assert_array_equal(part, full[r.y:r.y + r.h, r.x:r.x + r.w])
+    # The face, detected on the source, lands at twice its source position.
+    up = render(tmp_path, src, fake_face_model(), None, strength=0.0, job="up", before=before)
+    np.testing.assert_allclose(full[260, 280].astype(int), (255 - up[260, 280].astype(int)) * 0.7
+                               + up[260, 280].astype(int) * 0.3, atol=3)

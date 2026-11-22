@@ -171,6 +171,10 @@ enum MainMenu {
         view.addItem(withTitle: "Zoom Out", action: #selector(DocumentWindowController.zoomOut(_:)), keyEquivalent: "-")
         view.addItem(withTitle: "Zoom to Fit", action: #selector(DocumentWindowController.zoomToFit(_:)), keyEquivalent: "0")
         view.addItem(withTitle: "Actual Size", action: #selector(DocumentWindowController.actualSize(_:)), keyEquivalent: "1")
+        view.addItem(.separator())
+        view.addItem(withTitle: "Select Preview Area", action: #selector(DocumentWindowController.selectPreviewArea(_:)), keyEquivalent: "e")
+        let visible = view.addItem(withTitle: "Preview Area in View", action: #selector(DocumentWindowController.previewAreaInView(_:)), keyEquivalent: "e")
+        visible.keyEquivalentModifierMask = [.command, .shift]
         add(view, to: main)
 
         let window = NSMenu(title: "Window")

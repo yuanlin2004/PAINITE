@@ -42,11 +42,13 @@ permission the first time the app connects.
 
 | Area | Behavior |
 | --- | --- |
+| Steps | The sidebar holds up to 4 steps (Denoise, Sharpen, Upscale 2×) that run top to bottom as one server job. Toggle, reorder, or remove each step; Upscale can appear once and is added last. |
 | Open | Finder, File › Open, drag onto the welcome window, or Lightroom **Edit in**. JPEG and TIFF only, as the server supports. |
 | Upload | Starts as soon as the photo opens. Content-addressed by SHA-256: `HEAD /sources/{sha}` first, so a photo the server already has is not sent again. If the server dropped it, the app uploads again and retries the job. |
-| Preview | The visible part of the photo, at most 2048 px square (1024 for upscale), requested 0.3 s after zooming, panning, or changing a setting. Each request supersedes the previous one; stale results are discarded. Lossless TIFF, so compression doesn't hide noise. The last six previews are cached. |
+| Preview area | A box you pick, at most 2048 px square (1024 with upscale), starting in the middle of the photo. Zooming and panning never change it. **Select Area** (⌘E) then drag to draw a new box, drag inside the box to move it, or click to center it there; Shift-drag does the same at any time; Esc cancels. **Preview Area in View** (⇧⌘E) picks what is on screen. A preview is rendered only when the area or the steps change. Lossless TIFF, so compression doesn't hide noise. The last six previews are cached. |
+| Preview box | Shown on both sides, snapped to the server's tile grid. It pulses yellow while the preview is rendering, turns white when the preview inside it is current, and orange if it failed. |
 | Compare | Original and enhanced side by side, always at the same zoom and position. 100% is one image pixel per screen pixel. The enhanced pane shows the original dimmed outside the previewed region. Upscaled previews are drawn into the same source region so the framing matches. Display is color managed through Core Animation in the file's own color space. |
-| Export | Same operation, strength, and model as the preview (the model is pinned from the preview). Progress, cancel, and retry. Downloads resume with HTTP Range and are checked against the result's SHA-256, written to a hidden temp file beside the destination, then renamed into place, so a failed or canceled export never touches an existing file. The original is never overwritten. |
+| Export | Same steps, strengths, and models as the preview (the model is pinned from the preview). Progress, cancel, and retry. Downloads resume with HTTP Range and are checked against the result's SHA-256, written to a hidden temp file beside the destination, then renamed into place, so a failed or canceled export never touches an existing file. The original is never overwritten. |
 | Model gone | If the previewed model is no longer installed at export, the app says so and asks for a new preview. |
 
 ## Lightroom desktop

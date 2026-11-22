@@ -68,15 +68,38 @@ class ParamsIn(BaseModel):
     strength: float | None = Field(default=None, ge=0, le=1)
 
 
+class StepIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    operation: str
+    params: ParamsIn = Field(default_factory=ParamsIn)
+    model: str | None = None
+
+
+MAX_STEPS = 4
+
+
 class JobRequest(BaseModel):
+    """Either one `operation` (with `params` and `model`), or a pipeline of `steps`
+    run in order in one job."""
+
     model_config = ConfigDict(extra="forbid")
     source_id: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     kind: Literal["preview", "full"]
-    operation: Literal["denoise", "sharpen", "upscale2x", "face"]
-    params: ParamsIn = Field(default_factory=ParamsIn)
+    operation: str | None = None
+    params: ParamsIn | None = None
     model: str | None = None
+    steps: list[StepIn] | None = Field(default=None, min_length=1, max_length=MAX_STEPS)
     region: RegionIn | None = None
     output: OutputIn = Field(default_factory=OutputIn)
+
+    def step_list(self) -> list[StepIn]:
+        if self.steps is not None:
+            if self.operation is not None or self.params is not None or self.model is not None:
+                raise ApiError(400, "bad_request", "give either operation/params/model or steps, not both")
+            return self.steps
+        if self.operation is None:
+            raise ApiError(400, "bad_request", "operation or steps is required")
+        return [StepIn(operation=self.operation, params=self.params or ParamsIn(), model=self.model)]
 
 
 # Helpers ---------------------------------------------------------------------
@@ -114,6 +137,7 @@ def job_view(job: dict, store) -> dict:
         "model": job["model"],
         "source_id": "sha256:" + job["source_sha"],
         "params": json.loads(job["params"]),
+        "steps": job_steps(job),
         "region": region,
         "progress": job["progress"],
         "created_at": _iso(job["created_at"]),
@@ -123,6 +147,13 @@ def job_view(job: dict, store) -> dict:
         "timings_ms": json.loads(job["timings"]),
         "error": error,
     }
+
+
+def job_steps(job: dict) -> list[dict]:
+    """The job's steps; jobs stored before pipelines have one step in the legacy columns."""
+    if job.get("steps"):
+        return json.loads(job["steps"])
+    return [{"operation": job["operation"], "model": job["model"], "params": json.loads(job["params"])}]
 
 
 def _gpu_status() -> dict:
@@ -275,19 +306,29 @@ def create_job(
         response.status_code = 200
         return job_view(existing, store)
 
-    model_id = body.model or reg.defaults.get(body.operation)
-    model = reg.get(model_id) if model_id else None
-    if model is None:
-        raise ApiError(409, "model_unavailable", f"model {model_id} is not installed")
-    if model.operation != body.operation:
-        raise ApiError(400, "invalid_params", f"model {model_id} does not perform {body.operation}")
-
-    params: dict = {}
-    if "strength" in OPERATION_PARAMS[body.operation]:
-        default = OPERATION_PARAMS[body.operation]["strength"]["default"]
-        params["strength"] = body.params.strength if body.params.strength is not None else default
-    elif body.params.strength is not None:
-        raise ApiError(400, "invalid_params", f"{body.operation} does not take a strength")
+    steps = []
+    for i, st in enumerate(body.step_list()):
+        where = f"step {i + 1}: " if body.steps is not None else ""
+        if st.operation not in OPERATION_PARAMS:
+            raise ApiError(400, "invalid_params", f"{where}unknown operation {st.operation!r}")
+        model_id = st.model or reg.defaults.get(st.operation)
+        model = reg.get(model_id) if model_id else None
+        if model is None:
+            raise ApiError(409, "model_unavailable", f"{where}model {model_id} is not installed")
+        if model.operation != st.operation:
+            raise ApiError(400, "invalid_params", f"{where}model {model_id} does not perform {st.operation}")
+        params: dict = {}
+        if "strength" in OPERATION_PARAMS[st.operation]:
+            default = OPERATION_PARAMS[st.operation]["strength"]["default"]
+            params["strength"] = st.params.strength if st.params.strength is not None else default
+        elif st.params.strength is not None:
+            raise ApiError(400, "invalid_params", f"{where}{st.operation} does not take a strength")
+        steps.append({"operation": st.operation, "model": model.id, "params": params, "scale": model.scale})
+    scale = 1
+    for st in steps:
+        scale *= st["scale"]
+    if sum(1 for st in steps if st["scale"] > 1) > 1:
+        raise ApiError(400, "invalid_params", "a pipeline can upscale at most once")
 
     sha = body.source_id.removeprefix("sha256:")
     src = store.get_source(owner, sha)
@@ -308,7 +349,7 @@ def create_job(
         raise ApiError(400, "bad_request", "full jobs do not take a region")
 
     area = region.w * region.h if region else src["width"] * src["height"]
-    if area * model.scale ** 2 > s.max_output_pixels:
+    if area * scale ** 2 > s.max_output_pixels:
         raise ApiError(422, "too_many_pixels", "output would exceed the server's output pixel limit")
 
     counts = store.count_active()
@@ -322,10 +363,11 @@ def create_job(
         "idem_key": idempotency_key,
         "body_hash": body_hash,
         "kind": body.kind,
-        "operation": body.operation,
-        "model": model.id,
+        "operation": steps[0]["operation"] if len(steps) == 1 else "pipeline",
+        "model": "+".join(st["model"] for st in steps),
         "source_sha": sha,
-        "params": dumps(params),
+        "params": dumps(steps[0]["params"] if len(steps) == 1 else {}),
+        "steps": dumps([{k: st[k] for k in ("operation", "model", "params")} for st in steps]),
         "region": dumps(region.as_dict()) if region else None,
         "output": dumps(body.output.model_dump(mode="json", exclude_none=True)),
         "state": "queued",

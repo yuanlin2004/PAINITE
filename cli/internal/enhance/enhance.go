@@ -20,13 +20,19 @@ import (
 
 // Options are the processing settings shared by every file.
 type Options struct {
-	Operation   string
-	Strength    *float64
-	Model       string
+	// Steps run in order in one server job. One step is sent as a plain operation.
+	Steps       []Step
+	Model       string // only with one step
 	JPEGQuality int
 	Overwrite   bool
 	Jobs        int // files in flight
 	Progress    io.Writer
+}
+
+// Step is one operation and its strength (nil: server default).
+type Step struct {
+	Operation string
+	Strength  *float64
 }
 
 // Result is one line of --json output.
@@ -115,14 +121,24 @@ func (r *runner) one(ctx context.Context, i int, it plan.Item) (res Result) {
 	res.ClientMS["upload"] = ms(time.Since(t0))
 
 	jr := api.JobRequest{
-		SourceID:  "sha256:" + sha,
-		Kind:      "full",
-		Operation: r.o.Operation,
-		Model:     r.o.Model,
-		Output:    map[string]any{"format": it.Format, "jpeg_quality": r.o.JPEGQuality},
+		SourceID: "sha256:" + sha,
+		Kind:     "full",
+		Output:   map[string]any{"format": it.Format, "jpeg_quality": r.o.JPEGQuality},
 	}
-	if r.o.Strength != nil {
-		jr.Params = map[string]any{"strength": *r.o.Strength}
+	if len(r.o.Steps) == 1 {
+		st := r.o.Steps[0]
+		jr.Operation, jr.Model = st.Operation, r.o.Model
+		if st.Strength != nil {
+			jr.Params = map[string]any{"strength": *st.Strength}
+		}
+	} else {
+		for _, st := range r.o.Steps {
+			step := api.Step{Operation: st.Operation}
+			if st.Strength != nil {
+				step.Params = map[string]any{"strength": *st.Strength}
+			}
+			jr.Steps = append(jr.Steps, step)
+		}
 	}
 	job, err := r.c.CreateJob(ctx, jr, newKey())
 	if err != nil {

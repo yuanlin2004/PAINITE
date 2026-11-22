@@ -37,6 +37,7 @@ const usage = `painite enhances photos on a PAINITE inference server.
 
 Usage:
   painite enhance --op <denoise|sharpen|upscale2x|face> [--strength 0..1] -o <file|dir> [flags] <input>...
+  painite enhance --op denoise:0.6,sharpen:0.3,upscale2x -o <file|dir> [flags] <input>...   (pipeline)
   painite trust --fingerprint SHA256:<hex>
   painite status [--json]
   painite config set <key> <value>
@@ -154,9 +155,10 @@ func cmdEnhance(args []string, stdout, stderr io.Writer) int {
 		strength                  optionalFloat
 		conn                      connFlags
 	)
-	fs.StringVar(&op, "op", "", "operation: denoise, sharpen, upscale2x, or face (required)")
-	fs.Var(&strength, "strength", "strength 0..1 for denoise, sharpen and face (default: server default)")
-	fs.StringVar(&model, "model", "", "model ID to pin (default: server default for the operation)")
+	fs.StringVar(&op, "op", "", "operation: denoise, sharpen, upscale2x, or face (required); a comma-separated list runs\n"+
+		"a pipeline in one job, and op:strength sets one step's strength, e.g. denoise:0.6,sharpen:0.3,upscale2x")
+	fs.Var(&strength, "strength", "strength 0..1 for denoise, sharpen and face steps without their own (default: server default)")
+	fs.StringVar(&model, "model", "", "model ID to pin, single operation only (default: server default for the operation)")
 	fs.StringVar(&format, "format", "", "output format: jpeg or tiff (default: same as input, or from -o's extension)")
 	fs.IntVar(&quality, "jpeg-quality", 92, "JPEG quality 1..100")
 	fs.StringVar(&output, "o", "", "output file, or directory for several inputs (required)")
@@ -181,20 +183,15 @@ func cmdEnhance(args []string, stdout, stderr io.Writer) int {
 		}
 		return exitInvalid
 	}
-	switch op {
-	case "denoise", "sharpen", "upscale2x", "face":
-	case "":
-		return invalid("--op is required (denoise, sharpen, upscale2x, or face)")
-	default:
-		return invalid(fmt.Sprintf("unknown --op %q (use denoise, sharpen, upscale2x, or face)", op))
+	if strength.v != nil && (*strength.v < 0 || *strength.v > 1) {
+		return invalid("--strength must be between 0 and 1")
 	}
-	if strength.v != nil {
-		if op == "upscale2x" {
-			return invalid("--strength applies only to denoise, sharpen and face")
-		}
-		if *strength.v < 0 || *strength.v > 1 {
-			return invalid("--strength must be between 0 and 1")
-		}
+	steps, err := parseSteps(op, strength.v)
+	if err != nil {
+		return invalid(err.Error())
+	}
+	if model != "" && len(steps) > 1 {
+		return invalid("--model works only with a single operation")
 	}
 	if quality < 1 || quality > 100 {
 		return invalid("--jpeg-quality must be between 1 and 100")
@@ -241,7 +238,7 @@ func cmdEnhance(args []string, stdout, stderr io.Writer) int {
 		progress = nil
 	}
 	results := enhance.Run(ctx, client, items, enhance.Options{
-		Operation: op, Strength: strength.v, Model: model, JPEGQuality: quality, Overwrite: overwrite,
+		Steps: steps, Model: model, JPEGQuality: quality, Overwrite: overwrite,
 		Jobs: jobs, Progress: progress,
 	})
 
@@ -479,4 +476,60 @@ func cmdTrust(args []string, stdout, stderr io.Writer) int {
 	}
 	fmt.Fprintf(stderr, "Trusted %s for %s (saved to %s).\n", got, cfg.Endpoint, caPath)
 	return exitOK
+}
+
+// maxSteps matches the server's limit on pipeline length.
+const maxSteps = 4
+
+// strengthOps take a strength; other known operations don't.
+var strengthOps = map[string]bool{"denoise": true, "sharpen": true, "face": true}
+var knownOps = map[string]bool{"denoise": true, "sharpen": true, "upscale2x": true, "face": true}
+
+// parseSteps reads --op: "denoise", or a pipeline "denoise:0.6,sharpen,upscale2x".
+// defaultStrength applies to strength steps that don't set their own.
+func parseSteps(spec string, defaultStrength *float64) ([]enhance.Step, error) {
+	if strings.TrimSpace(spec) == "" {
+		return nil, fmt.Errorf("--op is required (denoise, sharpen, upscale2x, or face)")
+	}
+	var steps []enhance.Step
+	upscales := 0
+	for _, part := range strings.Split(spec, ",") {
+		name, val, hasVal := strings.Cut(strings.TrimSpace(part), ":")
+		if !knownOps[name] {
+			return nil, fmt.Errorf("unknown operation %q in --op (use denoise, sharpen, upscale2x, or face)", name)
+		}
+		st := enhance.Step{Operation: name}
+		if hasVal {
+			if !strengthOps[name] {
+				return nil, fmt.Errorf("%s does not take a strength", name)
+			}
+			var f float64
+			if _, err := fmt.Sscan(val, &f); err != nil || f < 0 || f > 1 {
+				return nil, fmt.Errorf("strength for %s must be a number between 0 and 1", name)
+			}
+			st.Strength = &f
+		} else if strengthOps[name] {
+			st.Strength = defaultStrength
+		}
+		if name == "upscale2x" {
+			upscales++
+		}
+		steps = append(steps, st)
+	}
+	if len(steps) > maxSteps {
+		return nil, fmt.Errorf("a pipeline has at most %d steps", maxSteps)
+	}
+	if upscales > 1 {
+		return nil, fmt.Errorf("a pipeline can upscale at most once")
+	}
+	if defaultStrength != nil {
+		any := false
+		for _, st := range steps {
+			any = any || strengthOps[st.Operation]
+		}
+		if !any {
+			return nil, fmt.Errorf("--strength applies only to denoise, sharpen and face")
+		}
+	}
+	return steps, nil
 }

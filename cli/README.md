@@ -47,7 +47,14 @@ override it, and `--endpoint`, `--token`, `--ca-file` override both.
 painite enhance --op denoise --strength 0.6 -o out/ IMG_001.jpg IMG_002.tif
 painite enhance --op face -o portraits/ *.jpg
 painite enhance --op upscale2x --json --overwrite -o big.tif small.tif
+painite enhance --op denoise:0.6,sharpen:0.3,upscale2x -o out/ IMG_001.tif   # pipeline
 ```
+
+- A comma-separated `--op` runs a pipeline: the steps run in order in one
+  server job, so there is one upload and one download. `op:strength` sets one
+  step's strength; `--strength` sets it for the strength steps that don't.
+  Up to four steps, with at most one upscale. `--model` works only with a
+  single operation.
 
 - With several inputs, or when `-o` is a directory or ends in `/`, each result
   keeps its input's name inside that directory. `--format jpeg|tiff` changes

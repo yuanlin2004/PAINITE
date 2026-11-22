@@ -36,9 +36,9 @@ final class DocumentModel: ObservableObject {
         let image: CGImage
         /// Displayed source pixels the preview covers (snapped to the server's tile grid).
         let region: Region
-        let operation: PainiteKit.Operation
-        let strength: Double?
-        let model: String
+        let signature: RecipeSignature
+        /// The model each step used, in order.
+        let models: [String]
         let serverMs: Double?
     }
 
@@ -52,24 +52,35 @@ final class DocumentModel: ObservableObject {
     @Published private(set) var sourceFormat: ImageFormat?
     @Published private(set) var bitsPerChannel = 8
 
-    @Published var operation: PainiteKit.Operation = .denoise {
-        didSet { if oldValue != operation { settingsChanged() } }
-    }
-    @Published var strength: Double = 0.5 {
-        didSet { if oldValue != strength { settingsChanged() } }
+    /// The enhancement steps, run in order in one server job.
+    @Published var steps: [RecipeStep] = [RecipeStep(operation: .denoise)] {
+        didSet { if oldValue != steps { settingsChanged() } }
     }
     @Published var exportFormat: ImageFormat = .tiff
 
     @Published private(set) var upload: UploadState = .idle
-    @Published private(set) var preview: Preview?
-    @Published private(set) var previewState: PreviewState = .idle
+    @Published private(set) var preview: Preview? {
+        didSet { updatePreviewBox() }
+    }
+    @Published private(set) var previewState: PreviewState = .idle {
+        didSet { if oldValue != previewState { updatePreviewBox() } }
+    }
     @Published private(set) var export: ExportState = .idle
     @Published private(set) var zoomPercent: Double = 0
+    /// True while the next drag on the photo picks the preview area.
+    @Published var isSelectingArea = false {
+        didSet { viewport?.selectMode = isSelectingArea }
+    }
 
     /// The compare view, for zoom commands.
     weak var viewport: CompareView?
 
     private var visible: CGRect = .zero
+    /// The area the user picked for previews, in displayed source pixels. Zooming
+    /// and panning never change it; only Select Area or Preview Visible Area do.
+    private(set) var selection: CGRect?
+    private var orientation = 1
+    private var storedSize = (width: 0, height: 0)
     private var sha: String?
     private var uploadTask: Task<String, Error>?
     private var debounceTask: Task<Void, Never>?
@@ -81,8 +92,7 @@ final class DocumentModel: ObservableObject {
     private var cacheOrder: [CacheKey] = []
 
     private struct CacheKey: Hashable {
-        let operation: PainiteKit.Operation
-        let strength: Int?
+        let signature: RecipeSignature
         let region: Region
     }
 
@@ -94,24 +104,59 @@ final class DocumentModel: ObservableObject {
 
     var title: String { url.lastPathComponent }
 
-    var operationHasStrength: Bool {
-        if let info = server.capabilities?.operation(operation) { return info.params["strength"] != nil }
-        return operation != .upscale2x
+    func takesStrength(_ op: PainiteKit.Operation) -> Bool {
+        if let info = server.capabilities?.operation(op) { return info.params["strength"] != nil }
+        return op != .upscale2x
     }
 
-    var strengthRange: ClosedRange<Double> {
-        if let r = server.capabilities?.operation(operation)?.params["strength"] { return r.min...r.max }
+    func strengthRange(_ op: PainiteKit.Operation) -> ClosedRange<Double> {
+        if let r = server.capabilities?.operation(op)?.params["strength"] { return r.min...r.max }
         return 0...1
     }
 
-    /// The preview on screen matches the current controls.
+    /// What the enabled steps render.
+    var signature: RecipeSignature { Recipe.signature(steps, takesStrength: takesStrength) }
+
+    /// The preview on screen matches the current steps.
     var previewIsCurrent: Bool {
         guard let preview else { return false }
-        return preview.operation == operation && preview.strength == effectiveStrength
+        return preview.signature == signature
     }
 
-    private var effectiveStrength: Double? {
-        operationHasStrength ? (strength * 100).rounded() / 100 : nil
+    // MARK: Steps
+
+    func canAdd(_ op: PainiteKit.Operation) -> Bool { Recipe.canAdd(op, to: steps) && !export.isRunning }
+
+    func addStep(_ op: PainiteKit.Operation) {
+        guard canAdd(op) else { return }
+        let strength = server.capabilities?.operation(op)?.params["strength"]?.default ?? 0.5
+        var new = steps
+        // Keep an upscale last unless the photographer moves it: enhance detail at native size first.
+        if op.scale == 1, let up = new.firstIndex(where: { $0.operation.scale > 1 }), up == new.count - 1 {
+            new.insert(RecipeStep(operation: op, strength: strength), at: up)
+        } else {
+            new.append(RecipeStep(operation: op, strength: strength))
+        }
+        steps = new
+    }
+
+    func removeStep(_ id: UUID) {
+        steps.removeAll { $0.id == id }
+    }
+
+    func moveStep(_ id: UUID, by offset: Int) {
+        guard let i = steps.firstIndex(where: { $0.id == id }) else { return }
+        let j = i + offset
+        guard steps.indices.contains(j) else { return }
+        steps.swapAt(i, j)
+    }
+
+    /// The model the server will use (or the preview used) for the i-th enabled step.
+    func modelID(forEnabledStep i: Int) -> String? {
+        let sig = signature
+        guard sig.items.indices.contains(i) else { return nil }
+        if let p = preview, p.signature == sig, p.models.indices.contains(i) { return p.models[i] }
+        return server.capabilities?.operation(sig.items[i].operation)?.defaultModel
     }
 
     // MARK: Loading and upload
@@ -124,6 +169,8 @@ final class DocumentModel: ObservableObject {
             imageSize = loaded.size
             sourceFormat = loaded.format
             bitsPerChannel = loaded.bitsPerChannel
+            orientation = loaded.orientation
+            storedSize = (loaded.storedWidth, loaded.storedHeight)
             exportFormat = loaded.format ?? .tiff
             if loaded.format == nil {
                 loadError = "PAINITE works with JPEG and TIFF files. This file can be viewed but not enhanced."
@@ -195,18 +242,68 @@ final class DocumentModel: ObservableObject {
 
     // MARK: Preview
 
-    /// Called by the compare view whenever zoom or position changes.
+    /// Called by the compare view whenever zoom or position changes. Only the
+    /// first call picks an area (the middle of the photo); after that, zoom and
+    /// pan just move the view.
     func viewportChanged(visible: CGRect, zoomPercent: Double) {
         self.zoomPercent = zoomPercent
-        guard visible != self.visible else { return }
         self.visible = visible
-        schedulePreview(after: 0.3)
+        if selection == nil, image != nil, imageSize.width > 0 {
+            selectArea(CGRect(origin: .zero, size: imageSize))
+        }
+    }
+
+    /// Sets the preview area (displayed source pixels) and renders it.
+    func selectArea(_ rect: CGRect) {
+        isSelectingArea = false
+        guard image != nil, imageSize.width > 0,
+              let r = PreviewGeometry.requestRegion(visible: rect, imageSize: imageSize, scale: Recipe.scale(signature))
+        else { return }
+        selection = CGRect(x: r.x, y: r.y, width: r.w, height: r.h)
+        viewport?.setSelection(selection)
+        updatePreviewBox()
+        schedulePreview(after: 0)
+    }
+
+    func previewVisibleArea() {
+        guard !visible.isEmpty else { return }
+        selectArea(visible)
+    }
+
+    /// The selection, capped to what one preview may cover with the current steps.
+    private func wantedRegion() -> Region? {
+        guard let selection, image != nil else { return nil }
+        return PreviewGeometry.requestRegion(visible: selection, imageSize: imageSize, scale: Recipe.scale(signature))
+    }
+
+    /// The box the next (or current) preview covers, exactly as the server will
+    /// snap it to its tile grid.
+    private func targetRegion() -> Region? {
+        let sig = signature
+        guard loadError == nil, !sig.items.isEmpty, let wanted = wantedRegion() else { return nil }
+        if let p = preview, p.signature == sig, PreviewGeometry.covers(p.region, wanted) {
+            return p.region
+        }
+        guard let tile = server.capabilities?.limits.tileSize, storedSize.width > 0 else { return wanted }
+        return TileGrid.snap(wanted, storedWidth: storedSize.width, storedHeight: storedSize.height,
+                             orientation: orientation, tile: tile)
+    }
+
+    private func updatePreviewBox() {
+        let state: CompareView.BoxState
+        switch previewState {
+        case .rendering: state = .rendering
+        case .failed: state = .failed
+        default: state = targetRegion() == preview?.region && previewIsCurrent ? .ready : .pending
+        }
+        viewport?.setPreviewBox(targetRegion(), state: state)
     }
 
     private func settingsChanged() {
         if export.isRunning { return }
         if case .done = export { export = .idle }
         if case .failed = export { export = .idle }
+        updatePreviewBox()
         schedulePreview(after: 0.25)
     }
 
@@ -231,15 +328,19 @@ final class DocumentModel: ObservableObject {
     }
 
     private func startPreview() {
-        guard image != nil, loadError == nil, !visible.isEmpty,
-              let region = PreviewGeometry.requestRegion(visible: visible, imageSize: imageSize, operation: operation)
-        else { return }
-        let op = operation
-        let strength = effectiveStrength
-        if let p = preview, p.operation == op, p.strength == strength, PreviewGeometry.covers(p.region, region) {
+        let sig = signature
+        guard image != nil, loadError == nil, !sig.items.isEmpty, let region = wantedRegion() else {
+            if sig.items.isEmpty {
+                previewTask?.cancel()
+                cancelServerPreview()
+                previewState = .idle
+            }
             return
         }
-        let key = CacheKey(operation: op, strength: strength.map { Int(($0 * 100).rounded()) }, region: region)
+        if let p = preview, p.signature == sig, PreviewGeometry.covers(p.region, region) {
+            return
+        }
+        let key = CacheKey(signature: sig, region: region)
         if let hit = cache[key] {
             previewTask?.cancel()
             preview = hit
@@ -255,7 +356,7 @@ final class DocumentModel: ObservableObject {
         previewTask = Task { [weak self] in
             guard let self else { return }
             do {
-                let p = try await renderPreview(op: op, strength: strength, region: region, seq: seq)
+                let p = try await renderPreview(sig, region: region, seq: seq)
                 guard seq == previewSeq else { return }
                 remember(p, for: key)
                 preview = p
@@ -270,15 +371,22 @@ final class DocumentModel: ObservableObject {
         }
     }
 
-    private func renderPreview(op: PainiteKit.Operation, strength: Double?, region: Region, seq: Int) async throws -> Preview {
+    private func defaultModels(_ sig: RecipeSignature, _ caps: Capabilities) throws -> [String] {
+        try sig.items.map { item in
+            guard let m = caps.operation(item.operation)?.defaultModel else {
+                throw APIError(code: "model_unavailable", message: "The server has no model for \(item.operation.title).")
+            }
+            return m
+        }
+    }
+
+    private func renderPreview(_ sig: RecipeSignature, region: Region, seq: Int) async throws -> Preview {
         let client = try server.requireClient()
         let caps = try await server.currentCapabilities()
-        guard let model = caps.operation(op)?.defaultModel else {
-            throw APIError(code: "model_unavailable", message: "The server has no model for \(op.title).")
-        }
+        let models = try defaultModels(sig, caps)
         let job = try await withSource { sourceID in
-            let request = JobRequest(sourceId: sourceID, kind: .preview, operation: op, strength: strength,
-                                     model: model, region: region, format: .tiff)
+            let request = JobRequest(sourceId: sourceID, kind: .preview, steps: Recipe.jobSteps(sig, models: models),
+                                     region: region, format: .tiff)
             let key = "mac-preview-\(UUID().uuidString)"
             return try await client.retrying { try await client.createJob(request, idempotencyKey: key) }
         }
@@ -298,8 +406,8 @@ final class DocumentModel: ObservableObject {
         Task.detached { try? await client.deleteResult(jobID: jobID) }
         let loaded = try await Task.detached(priority: .userInitiated) { try ImageLoader.load(tmp) }.value
         previewJobID = nil
-        return Preview(image: loaded.image, region: done.region ?? region, operation: op, strength: strength,
-                       model: done.model, serverMs: done.timingsMs?["total"])
+        return Preview(image: loaded.image, region: done.region ?? region, signature: sig,
+                       models: done.steps?.map(\.model) ?? [done.model], serverMs: done.timingsMs?["total"])
     }
 
     private func cancelServerPreview() {
@@ -364,10 +472,13 @@ final class DocumentModel: ObservableObject {
 
     private func startExport(to destination: URL, format: ImageFormat, inPlace: Bool) {
         guard !export.isRunning, loadError == nil else { return }
-        let op = operation
-        let strength = effectiveStrength
-        // Pin the model the preview used, so export matches what was shown.
-        let pinned = (preview?.operation == op) ? preview?.model : nil
+        let sig = signature
+        guard !sig.items.isEmpty else {
+            export = .failed("Add at least one step before exporting.")
+            return
+        }
+        // Pin the models the preview used, so export matches what was shown.
+        let pinned = preview?.signature == sig ? preview?.models : nil
         export = .running("Preparing", nil)
         exportTask = Task { [weak self] in
             guard let self else { return }
@@ -376,14 +487,12 @@ final class DocumentModel: ObservableObject {
             do {
                 let client = try server.requireClient()
                 let caps = try await server.currentCapabilities()
-                guard let model = pinned ?? caps.operation(op)?.defaultModel else {
-                    throw APIError(code: "model_unavailable", message: "no model")
-                }
+                let models = try pinned ?? defaultModels(sig, caps)
                 if upload != .ready { export = .running("Uploading", nil) }
                 let key = "mac-export-\(UUID().uuidString)"
                 let job = try await withSource { sourceID in
-                    let request = JobRequest(sourceId: sourceID, kind: .full, operation: op, strength: strength,
-                                             model: model, region: nil, format: format)
+                    let request = JobRequest(sourceId: sourceID, kind: .full, steps: Recipe.jobSteps(sig, models: models),
+                                             region: nil, format: format)
                     return try await client.retrying { try await client.createJob(request, idempotencyKey: key) }
                 }
                 jobID = job.id

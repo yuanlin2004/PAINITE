@@ -94,10 +94,15 @@ class JobOutput:
     timings_ms: dict[str, float]
 
 
+@dataclass
+class Step:
+    model: Model
+    params: dict
+
+
 def run(
     source_path: Path,
-    model: Model,
-    params: dict,
+    steps: list[Step],
     region: Rect | None,
     output: dict,
     work_dir: Path,
@@ -109,39 +114,94 @@ def run(
     on_progress: Callable[[float], None],
     is_canceled: Callable[[], bool],
 ) -> JobOutput:
-    timings: dict[str, float] = {}
-    t0 = time.perf_counter()
+    """Run `steps` in order over `region` (stored pixels, snapped to the tile
+    grid) or the whole image, and encode the result.
+
+    Each step tiles its own input on a grid anchored at that input's origin,
+    with real context around every tile, so a preview region reproduces the
+    same pixels as a full export even across several steps and an upscale."""
+    timings: dict[str, float] = {"decode": 0.0, "inference": 0.0}
     src = _open(source_path)
     maxval = 65535.0 if src.format == "ushort" else 255.0
+    sizes = [(src.width, src.height)]
+    for st in steps:
+        w, h = sizes[-1]
+        sizes.append((w * st.model.scale, h * st.model.scale))
+    total_scale = sizes[-1][0] // src.width
     area = region or Rect(0, 0, src.width, src.height)
-    out_w, out_h = area.w * model.scale, area.h * model.scale
-    if out_w * out_h > max_output_pixels:
-        raise ApiError(422, "too_many_pixels", f"output would have {out_w * out_h} pixels; limit is {max_output_pixels}")
-    if model.whole_image:
-        result = _run_whole_image(src, source_path, model, params, area, maxval, timings, on_progress, is_canceled)
-        return _finish(src, result, model.scale, output, work_dir, results_dir, job_id, timings)
-    # Decode only the area plus the context its edge tiles need.
-    pad = max(overlap, model.receptive_padding)
-    wx0, wy0 = max(area.x - pad, 0), max(area.y - pad, 0)
-    wx1, wy1 = min(area.x + area.w + pad, src.width), min(area.y + area.h + pad, src.height)
-    pixels = src.crop(wx0, wy0, wx1 - wx0, wy1 - wy0).numpy().astype(np.float32) / maxval
-    if pixels.ndim == 2:
-        pixels = pixels[:, :, None]
-    timings["decode"] = (time.perf_counter() - t0) * 1000
+    final = Rect(area.x * total_scale, area.y * total_scale, area.w * total_scale, area.h * total_scale)
+    if final.w * final.h > max_output_pixels:
+        raise ApiError(422, "too_many_pixels",
+                       f"output would have {final.w * final.h} pixels; limit is {max_output_pixels}")
 
-    t1 = time.perf_counter()
-    local = Rect(area.x - wx0, area.y - wy0, area.w, area.h)
-    # Tile grid is anchored at the full image's origin; shift it into the window.
-    result = _process_tiles(pixels, local, (wx0, wy0), model, params, tile, pad, on_progress, is_canceled)
-    timings["inference"] = (time.perf_counter() - t1) * 1000
-    return _finish(src, result, model.scale, output, work_dir, results_dir, job_id, timings)
+    n = len(steps)
 
+    def decode(need: Rect) -> np.ndarray:
+        t0 = time.perf_counter()
+        px = src.crop(need.x, need.y, need.w, need.h).numpy().astype(np.float32) / maxval
+        if px.ndim == 2:
+            px = px[:, :, None]
+        timings["decode"] += (time.perf_counter() - t0) * 1000
+        return px
 
-def _finish(src: pyvips.Image, result: np.ndarray, scale: int, output: dict, work_dir: Path, results_dir: Path,
-            job_id: str, timings: dict[str, float]) -> JobOutput:
+    def render(k: int, need: Rect) -> tuple[np.ndarray, Rect]:
+        """Pixels of step k's output (k=0 is the source) covering `need`, in that
+        output's coordinates. Returns the array and the rect it covers (⊇ need)."""
+        if k == 0:
+            return decode(need), need
+        st = steps[k - 1]
+        sc = st.model.scale
+        in_w, in_h = sizes[k - 1]
+        if st.model.whole_image:
+            return render_whole(k, st, need, in_w, in_h)
+        # Input pixels whose tiles produce `need`, grown to whole tiles of this step's grid.
+        ix0, iy0 = need.x // sc, need.y // sc
+        ix1, iy1 = -(-(need.x + need.w) // sc), -(-(need.y + need.h) // sc)
+        area = _snap(Rect(ix0, iy0, ix1 - ix0, iy1 - iy0), tile, in_w, in_h)
+        pad = max(overlap, st.model.receptive_padding)
+        want = Rect(max(area.x - pad, 0), max(area.y - pad, 0), 0, 0)
+        want = Rect(want.x, want.y, min(area.x + area.w + pad, in_w) - want.x,
+                    min(area.y + area.h + pad, in_h) - want.y)
+        inp, got = render(k - 1, want)
+        window = inp[want.y - got.y:want.y - got.y + want.h, want.x - got.x:want.x - got.x + want.w]
+        local = Rect(area.x - want.x, area.y - want.y, area.w, area.h)
+        t1 = time.perf_counter()
+
+        def step_progress(p: float) -> None:
+            on_progress((k - 1 + p) / n)
+
+        out = _process_tiles(window, local, (want.x, want.y), st.model, st.params, tile, pad,
+                             step_progress, is_canceled)
+        timings["inference"] += (time.perf_counter() - t1) * 1000
+        return out, Rect(area.x * sc, area.y * sc, area.w * sc, area.h * sc)
+
+    def render_whole(k: int, st: Step, need: Rect, in_w: int, in_h: int) -> tuple[np.ndarray, Rect]:
+        """A whole-image step (face). Faces are detected once on the source and
+        scaled to this step's input; the step needs `need` plus the full box of
+        every face touching it, and nothing else."""
+        model = st.model
+        dets = _detections(src, source_path, model, maxval, timings)
+        faces = model.layout(dets, in_w // src.width, in_w, in_h)
+        want = model.input_rect(faces, need)
+        inp, got = render(k - 1, want)
+        window = inp[want.y - got.y:want.y - got.y + want.h, want.x - got.x:want.x - got.x + want.w]
+        t1 = time.perf_counter()
+
+        def step_progress(p: float) -> None:
+            on_progress((k - 1 + p) / n)
+
+        out = model.run_area(window, (want.x, want.y), need, faces, st.params.get("strength"), step_progress,
+                             is_canceled)
+        timings["inference"] += (time.perf_counter() - t1) * 1000
+        return out, need
+
+    pixels, got = render(n, final)
+    result = pixels[final.y - got.y:final.y - got.y + final.h, final.x - got.x:final.x - got.x + final.w]
+
     t2 = time.perf_counter()
     fmt = output.get("format") or ("tiff" if src.get("vips-loader").startswith("tiff") else "jpeg")
-    out_path = _encode(src, result, scale, fmt, int(output.get("jpeg_quality", 92)), work_dir, results_dir, job_id)
+    out_path = _encode(src, np.ascontiguousarray(result), total_scale, fmt, int(output.get("jpeg_quality", 92)),
+                       work_dir, results_dir, job_id)
     timings["encode"] = (time.perf_counter() - t2) * 1000
 
     digest = hashlib.sha256()
@@ -159,30 +219,12 @@ def _finish(src: pyvips.Image, result: np.ndarray, scale: int, output: dict, wor
     )
 
 
-def _decode(src: pyvips.Image, r: Rect, maxval: float) -> np.ndarray:
-    px = src.crop(r.x, r.y, r.w, r.h).numpy().astype(np.float32) / maxval
-    return px[:, :, None] if px.ndim == 2 else px
-
-
-def _run_whole_image(
-    src: pyvips.Image,
-    source_path: Path,
-    model: Model,
-    params: dict,
-    area: Rect,
-    maxval: float,
-    timings: dict[str, float],
-    on_progress: Callable[[float], None],
-    is_canceled: Callable[[], bool],
-) -> np.ndarray:
-    """Models that look at the whole image (face): detect on a downscaled copy
-    of the full image, then decode only the area plus whatever the model needs
-    around it. Detection never depends on the region, so a preview matches
-    the same pixels of an export."""
-    t0 = time.perf_counter()
+def _detections(src: pyvips.Image, source_path: Path, model: Model, maxval: float,
+                timings: dict[str, float]) -> list:
+    """Faces in the source, in stored pixels, cached by the model per source.
+    Detection runs upright: on an orientation-applied downscale of the whole
+    image, so it never depends on the requested region."""
     width, height = src.width, src.height
-    # Faces are detected upright: in displayed (EXIF-orientation-applied)
-    # pixels, then mapped back to stored pixels.
     fields = src.get_fields()
     orientation = src.get("orientation") if "orientation" in fields else 1
     orientation = orientation if 1 <= orientation <= 8 else 1
@@ -190,24 +232,28 @@ def _run_whole_image(
     dw, dh = model.detection_size(disp_w, disp_h)
 
     def small() -> np.ndarray:
+        t0 = time.perf_counter()
         img = src.autorot() if orientation != 1 else src
         if (dw, dh) != (disp_w, disp_h):
             img = img.resize(dw / disp_w, vscale=dh / disp_h)
-        return _decode(img, Rect(0, 0, dw, dh), maxval)
+        px = img.crop(0, 0, dw, dh).numpy().astype(np.float32) / maxval
+        timings["decode"] += (time.perf_counter() - t0) * 1000
+        return px[:, :, None] if px.ndim == 2 else px
 
     st = source_path.stat()
     dets = model.detections((str(source_path), st.st_mtime_ns, st.st_size), small, disp_w, disp_h)
     if orientation != 1:
         dets = [(score, np.array([display_point_to_stored(x, y, width, height, orientation) for x, y in pts]))
                 for score, pts in dets]
-    faces = model.layout(dets, 1, width, height)
-    need = model.input_rect(faces, area)
-    window = _decode(src, need, maxval)
-    timings["decode"] = (time.perf_counter() - t0) * 1000
-    t1 = time.perf_counter()
-    result = model.run_area(window, (need.x, need.y), area, faces, params.get("strength"), on_progress, is_canceled)
-    timings["inference"] = (time.perf_counter() - t1) * 1000
-    return result
+    return dets
+
+
+def _snap(r: Rect, tile: int, width: int, height: int) -> Rect:
+    x0 = (r.x // tile) * tile
+    y0 = (r.y // tile) * tile
+    x1 = min(-(-(r.x + r.w) // tile) * tile, width)
+    y1 = min(-(-(r.y + r.h) // tile) * tile, height)
+    return Rect(x0, y0, x1 - x0, y1 - y0)
 
 
 def _process_tiles(
