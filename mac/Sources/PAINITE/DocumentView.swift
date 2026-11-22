@@ -72,6 +72,14 @@ struct DocumentView: View {
 
     private var zoomControls: some View {
         HStack(spacing: 4) {
+            Toggle(isOn: $model.isSelectingArea) {
+                Label("Select Area", systemImage: "viewfinder")
+            }
+            .toggleStyle(.button)
+            .help("Drag on the photo to choose the preview area, or click to move it there (⌘E). Shift-drag works at any time.")
+            Button { model.previewVisibleArea() } label: { Image(systemName: "rectangle.dashed") }
+                .help("Preview the area in view (⇧⌘E)")
+            Divider().frame(height: 16).padding(.horizontal, 4)
             Button { model.viewport?.zoomOut() } label: { Image(systemName: "minus.magnifyingglass") }
                 .help("Zoom Out (⌘−)")
             Text(model.zoomPercent > 0 ? "\(Int(model.zoomPercent.rounded()))%" : "–")
@@ -136,6 +144,11 @@ struct DocumentView: View {
             if model.signature.items.count > 1 {
                 Text(Recipe.label(model.signature))
                     .font(.caption).foregroundStyle(.secondary).lineLimit(2)
+            }
+
+            if !model.steps.isEmpty {
+                Text("The preview covers the box on the photo. Zooming and panning don't change it. To preview another area, use Select Area (⌘E) and drag or click on the photo, or Shift-drag.")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
 
             if case .failed(let msg) = model.previewState {

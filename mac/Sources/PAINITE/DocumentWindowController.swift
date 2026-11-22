@@ -60,6 +60,8 @@ final class DocumentWindowController: NSWindowController, NSWindowDelegate, NSMe
     @objc func zoomOut(_ sender: Any?) { model.viewport?.zoomOut() }
     @objc func zoomToFit(_ sender: Any?) { model.viewport?.fit() }
     @objc func actualSize(_ sender: Any?) { model.viewport?.actualSize() }
+    @objc func selectPreviewArea(_ sender: Any?) { model.isSelectingArea.toggle() }
+    @objc func previewAreaInView(_ sender: Any?) { model.previewVisibleArea() }
 
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
         switch item.action {

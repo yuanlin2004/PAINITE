@@ -67,11 +67,18 @@ final class DocumentModel: ObservableObject {
     }
     @Published private(set) var export: ExportState = .idle
     @Published private(set) var zoomPercent: Double = 0
+    /// True while the next drag on the photo picks the preview area.
+    @Published var isSelectingArea = false {
+        didSet { viewport?.selectMode = isSelectingArea }
+    }
 
     /// The compare view, for zoom commands.
     weak var viewport: CompareView?
 
     private var visible: CGRect = .zero
+    /// The area the user picked for previews, in displayed source pixels. Zooming
+    /// and panning never change it; only Select Area or Preview Visible Area do.
+    private(set) var selection: CGRect?
     private var orientation = 1
     private var storedSize = (width: 0, height: 0)
     private var sha: String?
@@ -235,22 +242,45 @@ final class DocumentModel: ObservableObject {
 
     // MARK: Preview
 
-    /// Called by the compare view whenever zoom or position changes.
+    /// Called by the compare view whenever zoom or position changes. Only the
+    /// first call picks an area (the middle of the photo); after that, zoom and
+    /// pan just move the view.
     func viewportChanged(visible: CGRect, zoomPercent: Double) {
         self.zoomPercent = zoomPercent
-        guard visible != self.visible else { return }
         self.visible = visible
+        if selection == nil, image != nil, imageSize.width > 0 {
+            selectArea(CGRect(origin: .zero, size: imageSize))
+        }
+    }
+
+    /// Sets the preview area (displayed source pixels) and renders it.
+    func selectArea(_ rect: CGRect) {
+        isSelectingArea = false
+        guard image != nil, imageSize.width > 0,
+              let r = PreviewGeometry.requestRegion(visible: rect, imageSize: imageSize, scale: Recipe.scale(signature))
+        else { return }
+        selection = CGRect(x: r.x, y: r.y, width: r.w, height: r.h)
+        viewport?.setSelection(selection)
         updatePreviewBox()
-        schedulePreview(after: 0.33)
+        schedulePreview(after: 0)
+    }
+
+    func previewVisibleArea() {
+        guard !visible.isEmpty else { return }
+        selectArea(visible)
+    }
+
+    /// The selection, capped to what one preview may cover with the current steps.
+    private func wantedRegion() -> Region? {
+        guard let selection, image != nil else { return nil }
+        return PreviewGeometry.requestRegion(visible: selection, imageSize: imageSize, scale: Recipe.scale(signature))
     }
 
     /// The box the next (or current) preview covers, exactly as the server will
-    /// snap it to its tile grid. Shown at once while zooming and panning.
+    /// snap it to its tile grid.
     private func targetRegion() -> Region? {
         let sig = signature
-        guard image != nil, loadError == nil, !sig.items.isEmpty,
-              let wanted = PreviewGeometry.requestRegion(visible: visible, imageSize: imageSize, scale: Recipe.scale(sig))
-        else { return nil }
+        guard loadError == nil, !sig.items.isEmpty, let wanted = wantedRegion() else { return nil }
         if let p = preview, p.signature == sig, PreviewGeometry.covers(p.region, wanted) {
             return p.region
         }
@@ -299,9 +329,7 @@ final class DocumentModel: ObservableObject {
 
     private func startPreview() {
         let sig = signature
-        guard image != nil, loadError == nil, !visible.isEmpty, !sig.items.isEmpty,
-              let region = PreviewGeometry.requestRegion(visible: visible, imageSize: imageSize, scale: Recipe.scale(sig))
-        else {
+        guard image != nil, loadError == nil, !sig.items.isEmpty, let region = wantedRegion() else {
             if sig.items.isEmpty {
                 previewTask?.cancel()
                 cancelServerPreview()
