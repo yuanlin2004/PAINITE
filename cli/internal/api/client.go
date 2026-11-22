@@ -102,13 +102,22 @@ type Source struct {
 	Format   string `json:"format"`
 }
 
+// JobRequest is one operation (Operation, Params, Model) or a pipeline (Steps).
 type JobRequest struct {
 	SourceID  string         `json:"source_id"`
 	Kind      string         `json:"kind"`
+	Operation string         `json:"operation,omitempty"`
+	Params    map[string]any `json:"params,omitempty"`
+	Model     string         `json:"model,omitempty"`
+	Steps     []Step         `json:"steps,omitempty"`
+	Output    map[string]any `json:"output,omitempty"`
+}
+
+// Step is one operation in a pipeline.
+type Step struct {
 	Operation string         `json:"operation"`
 	Params    map[string]any `json:"params,omitempty"`
 	Model     string         `json:"model,omitempty"`
-	Output    map[string]any `json:"output,omitempty"`
 }
 
 type Job struct {

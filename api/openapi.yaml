@@ -366,21 +366,44 @@ components:
         w: { type: integer, minimum: 1 }
         h: { type: integer, minimum: 1 }
 
+    StepParams:
+      type: object
+      properties:
+        strength: { type: number, minimum: 0, maximum: 1 }
+
+    Step:
+      type: object
+      required: [operation]
+      additionalProperties: false
+      properties:
+        operation: { $ref: "#/components/schemas/Operation" }
+        params: { $ref: "#/components/schemas/StepParams" }
+        model:
+          type: string
+          description: Pinned model ID. Defaults to the operation's default model; the job reports the one used.
+
     JobRequest:
       type: object
-      required: [source_id, kind, operation]
+      description: |
+        One operation (`operation`, `params`, `model`), or a pipeline of 1 to 4
+        `steps` run in order in one job; give one form or the other. A pipeline
+        upscales at most once. Previews of a pipeline match the same region of
+        its full export exactly, like single operations.
+      required: [source_id, kind]
       additionalProperties: false
       properties:
         source_id: { type: string, pattern: "^sha256:[0-9a-f]{64}$" }
         kind: { type: string, enum: [preview, full] }
         operation: { $ref: "#/components/schemas/Operation" }
-        params:
-          type: object
-          properties:
-            strength: { type: number, minimum: 0, maximum: 1 }
+        params: { $ref: "#/components/schemas/StepParams" }
         model:
           type: string
           description: Pinned model ID. Defaults to the operation's default model; the job reports the one used.
+        steps:
+          type: array
+          minItems: 1
+          maxItems: 4
+          items: { $ref: "#/components/schemas/Step" }
         region: { $ref: "#/components/schemas/Region" }
         output:
           type: object
@@ -399,10 +422,24 @@ components:
         id: { type: string }
         state: { $ref: "#/components/schemas/JobState" }
         kind: { type: string, enum: [preview, full] }
-        operation: { $ref: "#/components/schemas/Operation" }
-        model: { type: string }
+        operation:
+          type: string
+          description: The operation, or "pipeline" for a job with several steps.
+        model:
+          type: string
+          description: The model used; for a pipeline, the step models joined with "+".
         source_id: { type: string }
         params: { type: object }
+        steps:
+          type: array
+          description: Every step with its resolved model and parameters (one entry for a single operation).
+          items:
+            type: object
+            required: [operation, model, params]
+            properties:
+              operation: { $ref: "#/components/schemas/Operation" }
+              model: { type: string }
+              params: { type: object }
         region:
           oneOf:
             - $ref: "#/components/schemas/Region"

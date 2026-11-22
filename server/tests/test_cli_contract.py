@@ -123,6 +123,23 @@ def test_collision_submits_nothing(cli_bin, server, tmp_path):
     assert not (tmp_path / "out").exists()
 
 
+def test_pipeline(cli_bin, server, tmp_path):
+    src = make_image(tmp_path / "in.jpg", 120, 80, fmt="jpeg")
+    out = tmp_path / "out.tif"
+    r = painite(cli_bin, server, tmp_path, "enhance", "--op", "denoise:0.6,sharpen,upscale2x", "--strength", "0.3",
+                "--json", "-o", str(out), str(src))
+    assert r.returncode == 0, r.stderr
+    res = json.loads(r.stdout)["results"][0]
+    assert res["status"] == "succeeded"
+    assert res["model"] == "denoise/identity@0.1.0+sharpen/identity@0.1.0+upscale2x/bilinear@0.1.0"
+    import pyvips
+    img = pyvips.Image.new_from_file(str(out))
+    assert (img.width, img.height) == (240, 160)
+    r = painite(cli_bin, server, tmp_path, "enhance", "--op", "upscale2x,upscale2x", "-o", str(tmp_path / "x.tif"),
+                str(src))
+    assert r.returncode == 2 and "upscale at most once" in r.stderr
+
+
 def test_invalid_flags(cli_bin, server, tmp_path):
     src = make_image(tmp_path / "in.jpg", 50, 50, fmt="jpeg")
     r = painite(cli_bin, server, tmp_path, "enhance", "--op", "upscale2x", "--strength", "0.5", "-o",

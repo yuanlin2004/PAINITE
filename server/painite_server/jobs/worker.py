@@ -78,7 +78,13 @@ class Worker:
         job_id = job["id"]
         started = time.time()
         timings = {"queue": (started - job["created_at"]) * 1000}
-        model = self.registry.get(job["model"])
+        steps = []
+        missing = None
+        for st in _job_steps(job):
+            m = self.registry.get(st["model"])
+            if m is None:
+                missing = missing or st["model"]
+            steps.append(pipeline.Step(model=m, params=st["params"]))
         last_progress = [0.0]
 
         def on_progress(p: float) -> None:
@@ -92,13 +98,12 @@ class Worker:
 
         log.info("job start id=%s kind=%s op=%s model=%s", job_id, job["kind"], job["operation"], job["model"])
         try:
-            if model is None:
-                raise ApiError(409, "model_unavailable", f"model {job['model']} is not installed")
+            if missing is not None:
+                raise ApiError(409, "model_unavailable", f"model {missing} is not installed")
             region = Rect(**json.loads(job["region"])) if job["region"] else None
             out = pipeline.run(
                 source_path=source_path(self.settings, job["owner"], job["source_sha"]),
-                model=model,
-                params=json.loads(job["params"]),
+                steps=steps,
                 region=region,
                 output=json.loads(job["output"]),
                 work_dir=self.settings.work_dir,
@@ -185,6 +190,12 @@ class Worker:
             for p in s.sources_dir.glob("*/*"):
                 if (p.parent.name, p.name) not in known:
                     p.unlink(missing_ok=True)
+
+
+def _job_steps(job: dict) -> list[dict]:
+    if job.get("steps"):
+        return json.loads(job["steps"])
+    return [{"operation": job["operation"], "model": job["model"], "params": json.loads(job["params"])}]
 
 
 def disk_usage(settings: Settings) -> int:
