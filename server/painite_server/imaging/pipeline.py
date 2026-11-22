@@ -11,7 +11,7 @@ import hashlib
 import os
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -19,7 +19,7 @@ import pyvips
 
 from ..errors import ApiError
 from ..models import Model
-from .geometry import Rect, display_point_to_stored, displayed_size
+from .geometry import Rect, display_point_to_stored, displayed_size, stored_rect_to_display
 
 LOADERS = {"jpegload": "jpeg", "jpegload_source": "jpeg", "tiffload": "tiff", "tiffload_source": "tiff"}
 FORMAT_EXT = {"jpeg": ".jpg", "tiff": ".tif"}
@@ -92,6 +92,7 @@ class JobOutput:
     width: int
     height: int
     timings_ms: dict[str, float]
+    info: dict = field(default_factory=dict)  # e.g. {"faces": [...]} from a face step
 
 
 @dataclass
@@ -187,6 +188,7 @@ def run(
         model = st.model
         dets = _detections(src, source_path, model, maxval, timings)
         faces = model.layout(dets, in_w // src.width, in_w, in_h)
+        face_report[:] = _face_report(src, dets, model.classify(dets, in_w // src.width, in_w, in_h))
         want = model.input_rect(faces, need)
         inp, got = render(k - 1, want)
         window = inp[want.y - got.y:want.y - got.y + want.h, want.x - got.x:want.x - got.x + want.w]
@@ -200,6 +202,7 @@ def run(
         timings["inference"] += (time.perf_counter() - t1) * 1000
         return out, need
 
+    face_report: list[dict] = []
     pixels, got = render(n, final)
     result = pixels[final.y - got.y:final.y - got.y + final.h, final.x - got.x:final.x - got.x + final.w]
 
@@ -221,7 +224,35 @@ def run(
         width=result.shape[1],
         height=result.shape[0],
         timings_ms=timings,
+        info={"faces": face_report} if any(st.model.whole_image for st in steps) else {},
     )
+
+
+def _face_report(src: pyvips.Image, dets: list, classified: list) -> list[dict]:
+    """Detected faces for clients, in displayed (orientation-applied) source
+    pixels like preview regions: the detector's face box, what the face step
+    did with it, and the side of its aligned crop at that step's scale."""
+    fields = src.get_fields()
+    orientation = src.get("orientation") if "orientation" in fields else 1
+    orientation = orientation if 1 <= orientation <= 8 else 1
+    out = []
+    for (score, _pts, box), (face, status) in zip(dets, classified, strict=True):
+        x0, y0 = max(int(np.floor(box[0])), 0), max(int(np.floor(box[1])), 0)
+        x1, y1 = min(int(np.ceil(box[2])), src.width), min(int(np.ceil(box[3])), src.height)
+        if x1 <= x0 or y1 <= y0:
+            continue
+        r = stored_rect_to_display(Rect(x0, y0, x1 - x0, y1 - y0), src.width, src.height, orientation)
+        out.append({"box": r.as_dict(), "status": status, "size": round(face.size), "score": round(score, 3)})
+    out.sort(key=lambda f: (f["box"]["y"], f["box"]["x"]))
+    return out
+
+
+def _box_to_stored(box, width: int, height: int, orientation: int) -> np.ndarray:
+    """A displayed-pixel box (x0, y0, x1, y1, pixel edges) in stored pixels."""
+    corners = [display_point_to_stored(x, y, width, height, orientation)
+               for x in (box[0], box[2] - 1) for y in (box[1], box[3] - 1)]
+    xs, ys = [c[0] for c in corners], [c[1] for c in corners]
+    return np.array([min(xs), min(ys), max(xs) + 1, max(ys) + 1])
 
 
 def _window(t: int, core: int, size: int, tile: int, pad: int) -> tuple[int, int]:
@@ -271,8 +302,8 @@ def _detections(src: pyvips.Image, source_path: Path, model: Model, maxval: floa
     st = source_path.stat()
     dets = model.detections((str(source_path), st.st_mtime_ns, st.st_size), small, disp_w, disp_h)
     if orientation != 1:
-        dets = [(score, np.array([display_point_to_stored(x, y, width, height, orientation) for x, y in pts]))
-                for score, pts in dets]
+        dets = [(score, np.array([display_point_to_stored(x, y, width, height, orientation) for x, y in pts]),
+                 _box_to_stored(box, width, height, orientation)) for score, pts, box in dets]
     return dets
 
 

@@ -155,6 +155,10 @@ struct DocumentView: View {
                     .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
 
+            if let faces = model.preview?.faces, model.signature.items.contains(where: { $0.operation == .face }) {
+                faceSummary(faces)
+            }
+
             if case .failed(let msg) = model.previewState {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(msg).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -163,6 +167,34 @@ struct DocumentView: View {
             }
         }
         .disabled(model.export.isRunning)
+    }
+
+    /// How many faces the face step enhanced or skipped, and the outline toggle.
+    @ViewBuilder private func faceSummary(_ faces: [FaceInfo]) -> some View {
+        let enhanced = faces.filter { $0.status == .enhanced }.count
+        let small = faces.filter { $0.status == .tooSmall }.count
+        let large = faces.filter { $0.status == .tooLarge }.count
+        VStack(alignment: .leading, spacing: 4) {
+            Toggle("Show faces", isOn: $model.showFaces)
+                .help("Outline the faces Enhance Faces found: green if enhanced, dashed orange if skipped")
+            if faces.isEmpty {
+                Text("No faces found.").font(.caption).foregroundStyle(.secondary)
+            } else {
+                Text("\(enhanced) enhanced" + (small + large > 0 ? ", \(small + large) skipped" : ""))
+                    .font(.caption).foregroundStyle(.secondary)
+                if small + large > 0 {
+                    Text(Self.skipNote(small: small, large: large))
+                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    private static func skipNote(small: Int, large: Int) -> String {
+        var parts: [String] = []
+        if small > 0 { parts.append("\(small) too small: the model would invent a different face") }
+        if large > 0 { parts.append("\(large) too large: the photo already has more real detail than the model adds") }
+        return "Dashed: " + parts.joined(separator: "; ") + "."
     }
 
     private var addStepMenu: some View {

@@ -145,6 +145,7 @@ def job_view(job: dict, store) -> dict:
         "finished_at": _iso(job["finished_at"]),
         "result": result,
         "timings_ms": json.loads(job["timings"]),
+        "faces": json.loads(job["info"]).get("faces") if job.get("info") else None,
         "error": error,
     }
 

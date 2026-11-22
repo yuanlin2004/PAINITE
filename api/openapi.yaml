@@ -470,6 +470,21 @@ components:
             inference: { type: number }
             encode: { type: number }
             total: { type: number }
+        faces:
+          type: [array, "null"]
+          description: |
+            Faces found by a `face` step, in displayed source pixels like `region`; null for jobs
+            without one. A preview reports every face in the image, not only those in its region.
+            `status` says what the step did: `enhanced`, or skipped as `too_small` / `too_large`
+            (by `size`, the side of the face's aligned crop in pixels at that step).
+          items:
+            type: object
+            required: [box, status, size]
+            properties:
+              box: { $ref: "#/components/schemas/Region" }
+              status: { type: string, enum: [enhanced, too_small, too_large] }
+              size: { type: integer }
+              score: { type: number }
         error:
           oneOf:
             - $ref: "#/components/schemas/Error/properties/error"

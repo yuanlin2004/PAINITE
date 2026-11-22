@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   result_expires_at REAL,
   result_deleted INTEGER NOT NULL DEFAULT 0,
   steps TEXT,
+  info TEXT,
   UNIQUE (owner, idem_key)
 );
 CREATE INDEX IF NOT EXISTS jobs_state ON jobs (state, kind, created_at);
@@ -111,6 +112,8 @@ class Store:
         cols = {r["name"] for r in self._db.execute("PRAGMA table_info(jobs)")}
         if "steps" not in cols:
             self._db.execute("ALTER TABLE jobs ADD COLUMN steps TEXT")
+        if "info" not in cols:
+            self._db.execute("ALTER TABLE jobs ADD COLUMN info TEXT")
 
     def close(self) -> None:
         with self._lock:
