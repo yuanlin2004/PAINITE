@@ -15,7 +15,7 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.1.0</string>
+	<string>1.0.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>LSMinimumSystemVersion</key>
@@ -27,7 +27,7 @@
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSHumanReadableCopyright</key>
-	<string>PAINITE</string>
+	<string>© 2026 Yuan Lin</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>PAINITE sends your photos to your PAINITE server on the local network for enhancement.</string>
 	<key>NSAppTransportSecurity</key>
