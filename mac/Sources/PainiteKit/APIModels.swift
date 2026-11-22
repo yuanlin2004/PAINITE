@@ -109,6 +109,13 @@ public struct Capabilities: Codable, Sendable, Equatable {
     public func model(_ id: String) -> ModelInfo? {
         models.first { $0.id == id }
     }
+
+    /// Operations whose default model is a placeholder that does not really
+    /// enhance. The server keeps its placeholders listed (and pinnable) after
+    /// real models are installed, so only the defaults matter.
+    public var placeholderOperations: [String] {
+        operations.filter { model($0.defaultModel)?.placeholder == true }.map(\.name)
+    }
 }
 
 public struct Source: Codable, Sendable, Equatable {

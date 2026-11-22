@@ -40,6 +40,21 @@ final class APIClientTests: XCTestCase {
         XCTAssertEqual(caps.operation(.upscale2x)?.params.isEmpty, true)
         XCTAssertEqual(caps.model("denoise/identity@0.1.0")?.placeholder, true)
         XCTAssertEqual(caps.limits.tileSize, 512)
+        XCTAssertEqual(caps.placeholderOperations, ["denoise"])
+    }
+
+    func testPlaceholderOperationsIgnoresListedButUnusedPlaceholders() throws {
+        // Real models installed: the placeholders stay listed but are no operation's default.
+        let caps = try APIClient.decoder.decode(Capabilities.self, from: Data("""
+        {"operations":[{"name":"denoise","default_model":"denoise/scunet-real-gan@1.0.0","params":{}},
+          {"name":"face","default_model":"face/identity@0.1.0","params":{}}],
+         "models":[{"id":"denoise/identity@0.1.0","operation":"denoise","version":"0.1.0","scale":1,"placeholder":true},
+           {"id":"denoise/scunet-real-gan@1.0.0","operation":"denoise","version":"1.0.0","scale":1},
+           {"id":"face/identity@0.1.0","operation":"face","version":"0.1.0","scale":1,"placeholder":true}],
+         "limits":{"max_upload_bytes":1,"max_input_pixels":1,"max_output_pixels":1,"queue_capacity":1},
+         "formats":{"input":["jpeg"],"output":["jpeg"]}}
+        """.utf8))
+        XCTAssertEqual(caps.placeholderOperations, ["face"])
     }
 
     func testJobRequestEncodingMatchesContract() throws {
