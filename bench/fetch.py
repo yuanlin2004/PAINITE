@@ -28,8 +28,13 @@ def main():
     for c in candidates(a.op, a.models):
         if c.baseline:
             continue
-        if not c.path.exists():
+        if c.url and c.url.startswith("gdrive-folder:"):
+            if not c.path.exists():
+                print(f"{c.id:40s} missing: gdown --folder {c.url.removeprefix('gdrive-folder:')} -O {c.path.parent}")
+                continue
+        elif not c.path.exists():
             print(f"fetch {c.id} <- {c.url}")
+            c.path.parent.mkdir(parents=True, exist_ok=True)
             tmp = c.path.with_suffix(".part")
             if c.url.startswith("gdrive:"):
                 subprocess.run(["gdown", "-q", c.url.removeprefix("gdrive:"), "-O", str(tmp)], check=True)

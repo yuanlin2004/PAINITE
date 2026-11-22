@@ -1,0 +1,21 @@
+# Real photos for the face bake-off, from Wikimedia Commons (full resolution, fetched by fetch_real.py).
+# name | class | Commons file title
+portrait_horridge | portrait | File:Adrian Horridge FRS.jpg
+portrait_garcia_alix | portrait | File:Carlos Garcia-Alix 02 by-dpc.jpg
+portrait_priest | portrait | File:Portrait Nepalese hindu priest in Kathmandu-070A2930.jpg
+portrait_marinescu | portrait | File:Marinescu Marian-Jean 2014-02-05 1.jpg
+portrait_richard | portrait | File:Pierre Richard-0851.jpg
+half_bahner | half-body | File:CINvCHI 2017-06-28 - Matt Bahner after win (41152554092).jpg
+half_rice | half-body | File:Smiling girl giving double V-sign while planting rice with grandmother.jpg
+half_selfie | half-body | File:Couple selfie stick Konigssluis Amsterdam 2016-09-13-6621.jpg
+event_coty | event | File:COTY 2018, Le Grand-Saconnex (1X7A9332).jpg
+event_daimler | event | File:Daimler press conference, GIMS 2018, Le Grand-Saconnex (1X7A0746).jpg
+event_locarno | event | File:Monica Bellucci, Giovanni Tortorici and Giona A. Nazzaro Artistic Director on the red carpet at the 79th Locarno Film Festival 2026 03.jpg
+event_silyan | event | File:The Tale of Silyan - Macedonian premiere.jpg
+group_it_cast | group | File:Partial cast of It (2017) at PCCC2018.jpg
+group_sxsw | group | File:Rizwan Manji, Aariq Manji, Hedyeh Falsafi, Samiya Khan, Kausar Mohammed, and Hina X Khan at SXSW on March 14 2024.jpg
+group_usa_team | group | File:USAvVEN 2019-06-09 - United States team photo (51169624742).jpg
+group_lawyers | group | File:State of the Black Women Lawyer 2024.jpg
+group_wiidii | group | File:EquipeWiidii-Juin2019.jpg
+group_oscal | group | File:OSCAL 2022 team photo.jpg
+group_hackathon | group | File:Wikimania 2026 - Hackathon - Team 10E group photo.jpg
