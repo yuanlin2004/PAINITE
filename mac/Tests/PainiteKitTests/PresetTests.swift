@@ -3,7 +3,7 @@ import Foundation
 import XCTest
 
 final class PresetTests: XCTestCase {
-    private func steps(_ ops: [Operation]) -> [RecipeStep] { ops.map { RecipeStep(operation: $0) } }
+    private func steps(_ ops: [PainiteKit.Operation]) -> [RecipeStep] { ops.map { RecipeStep(operation: $0) } }
 
     func testMovingMatchesSwiftUIOnMove() {
         let s = steps([.denoise, .sharpen, .face, .upscale2x])
