@@ -1,5 +1,6 @@
 import AppKit
 import PainiteKit
+import QuickLookThumbnailing
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -146,45 +147,134 @@ struct WelcomeView: View {
     @ObservedObject var server = ServerStore.shared
     var open: () -> Void
     var openURLs: ([URL]) -> Void
+    @State private var targeted = false
+    @State private var recent: [URL] = NSDocumentController.shared.recentDocumentURLs
 
     var body: some View {
         VStack(spacing: 18) {
-            if let icon = NSApp.applicationIconImage {
-                Image(nsImage: icon).resizable().frame(width: 96, height: 96)
-            }
-            Text("PAINITE").font(.largeTitle.weight(.semibold))
-            Text("Open a JPEG or TIFF photo to denoise, sharpen, or upscale it.")
-                .foregroundStyle(.secondary)
-            Button("Open Photo…", action: open)
-                .keyboardShortcut(.defaultAction)
-                .controlSize(.large)
-            Group {
-                switch server.status {
-                case .unconfigured:
-                    Button("Set up the server…") { AppDelegate.shared?.showSettings(nil) }.buttonStyle(.link)
-                case .checking:
-                    Text("Connecting to \(server.hostLabel)…")
-                case .connected:
-                    Text("Connected to \(server.hostLabel)\(server.usesPlaceholderModels ? " · placeholder models" : "")")
-                case .failed(let msg):
-                    VStack(spacing: 4) {
-                        Text(msg).multilineTextAlignment(.center)
-                        Button("Settings…") { AppDelegate.shared?.showSettings(nil) }.buttonStyle(.link)
-                    }
-                }
-            }
-            .font(.callout)
-            .foregroundStyle(.secondary)
+            dropZone
+            if !recent.isEmpty { recentRow }
         }
-        .padding(40)
-        .frame(width: 480, height: 400)
-        .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+        .padding(20)
+        .frame(width: 720)
+        .tint(.painite)
+        .onDrop(of: [.fileURL], isTargeted: $targeted) { providers in
             for provider in providers {
                 _ = provider.loadObject(ofClass: URL.self) { url, _ in
                     if let url { DispatchQueue.main.async { openURLs([url]) } }
                 }
             }
             return true
+        }
+        .onAppear { recent = NSDocumentController.shared.recentDocumentURLs }
+    }
+
+    private var unconfigured: Bool { server.status == .unconfigured }
+
+    private var dropZone: some View {
+        VStack(spacing: 12) {
+            if let icon = NSApp.applicationIconImage {
+                Image(nsImage: icon).resizable().frame(width: 72, height: 72)
+            }
+            Text(unconfigured ? "Connect to your server" : "Drop a photo here")
+                .font(.system(size: 22, weight: .bold))
+            Text(unconfigured ? "PAINITE enhances photos on your PAINITE server. Set it up to start."
+                              : "JPEG or TIFF, up to 16-bit. Or open one from Lightroom with Edit in.")
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            Group {
+                if unconfigured {
+                    Button("Connect to Server…") { AppDelegate.shared?.showSettings(nil) }
+                } else {
+                    Button("Open Photo…", action: open)
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .keyboardShortcut(.defaultAction)
+            .padding(.top, 4)
+            statusLine
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 36)
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .fill(targeted ? Color.painite.opacity(0.08) : Color.clear))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .strokeBorder(targeted ? Color.painite : Color.secondary.opacity(0.4),
+                          style: StrokeStyle(lineWidth: targeted ? 2 : 1, dash: [6, 4])))
+    }
+
+    /// Only shown when something is wrong.
+    @ViewBuilder private var statusLine: some View {
+        switch server.status {
+        case .failed(let msg):
+            HStack(spacing: 6) {
+                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                Text(msg).lineLimit(2)
+                Button("Settings…") { AppDelegate.shared?.showSettings(nil) }.buttonStyle(.link)
+            }
+            .font(.callout).foregroundStyle(.secondary)
+            .padding(.horizontal, 24)
+        case .connected where server.usesPlaceholderModels:
+            Text("Test models in use").font(.callout).foregroundStyle(.orange)
+        default:
+            EmptyView()
+        }
+    }
+
+    private var recentRow: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("RECENT").font(.caption.weight(.semibold)).foregroundStyle(.tertiary).tracking(0.5)
+                Spacer()
+                Button("Clear") {
+                    NSDocumentController.shared.clearRecentDocuments(nil)
+                    recent = []
+                }
+                .buttonStyle(.link).font(.caption)
+            }
+            HStack(alignment: .top, spacing: 14) {
+                ForEach(recent.prefix(4), id: \.self) { url in
+                    RecentPhoto(url: url) { openURLs([url]) }
+                }
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(.horizontal, 4)
+    }
+}
+
+/// A recent photo: Quick Look thumbnail and name.
+struct RecentPhoto: View {
+    let url: URL
+    let open: () -> Void
+    @State private var thumb: NSImage?
+
+    var body: some View {
+        Button(action: open) {
+            VStack(alignment: .leading, spacing: 6) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.primary.opacity(0.06))
+                    if let thumb {
+                        Image(nsImage: thumb).resizable().aspectRatio(contentMode: .fill)
+                    } else {
+                        Image(systemName: "photo").foregroundStyle(.tertiary)
+                    }
+                }
+                .frame(width: 156, height: 96)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                Text(url.lastPathComponent).font(.callout).lineLimit(1).truncationMode(.middle)
+                    .frame(width: 156, alignment: .leading)
+            }
+        }
+        .buttonStyle(.plain)
+        .help(url.path)
+        .task {
+            let size = CGSize(width: 312, height: 192)
+            let request = QLThumbnailGenerator.Request(fileAt: url, size: size, scale: 1, representationTypes: .thumbnail)
+            if let rep = try? await QLThumbnailGenerator.shared.generateBestRepresentation(for: request) {
+                thumb = rep.nsImage
+            }
         }
     }
 }

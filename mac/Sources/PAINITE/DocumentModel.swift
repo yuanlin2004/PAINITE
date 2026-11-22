@@ -54,13 +54,27 @@ final class DocumentModel: ObservableObject {
     @Published private(set) var sourceFormat: ImageFormat?
     @Published private(set) var bitsPerChannel = 8
 
-    /// The enhancement steps, run in order in one server job.
-    @Published var steps: [RecipeStep] = [RecipeStep(operation: .denoise)] {
-        didSet { if oldValue != steps { settingsChanged() } }
+    /// The enhancement steps, run in order in one server job. A new photo starts
+    /// from the last recipe used.
+    @Published var steps: [RecipeStep] {
+        didSet {
+            if oldValue != steps {
+                settingsChanged()
+                LastRecipe(preset: currentPreset?.name, steps: steps.map(StoredStep.init)).save()
+            }
+        }
+    }
+    /// The preset the steps came from; they may have been edited since ("Custom · from …").
+    @Published private(set) var basePreset: String?
+    /// True while a slider is being dragged: the preview is sent when it is released.
+    @Published var isAdjusting = false {
+        didSet { if oldValue && !isAdjusting { schedulePreview(after: 0) } }
     }
     @Published var exportFormat: ImageFormat = .tiff
     /// Outline the faces a face step found: enhanced ones solid, skipped ones dashed.
     @Published var showFaces = true
+    @Published var compareMode: CompareView.Mode = .split
+    @Published var inspectorVisible = true
 
     @Published private(set) var upload: UploadState = .idle
     @Published private(set) var preview: Preview? {
@@ -103,6 +117,9 @@ final class DocumentModel: ObservableObject {
     init(url: URL) {
         self.url = url
         handoff = Handoff.inspect(url)
+        let last = LastRecipe.load()
+        steps = last.steps.map { $0.makeStep() }
+        basePreset = last.preset
         Task { await load() }
     }
 
@@ -127,12 +144,41 @@ final class DocumentModel: ObservableObject {
         return preview.signature == signature
     }
 
+    // MARK: Presets
+
+    /// The preset the steps match exactly, if any.
+    var currentPreset: Preset? {
+        Preset.builtIn.first { $0.matches(steps) }
+    }
+
+    /// "High ISO", or "Custom" with the preset it came from.
+    var presetTitle: (name: String, from: String?) {
+        if let p = currentPreset { return (p.name, nil) }
+        return ("Custom", basePreset)
+    }
+
+    func applyPreset(_ preset: Preset) {
+        basePreset = preset.name
+        steps = preset.steps.compactMap { s in
+            canOffer(s.operation) ? s.makeStep() : nil
+        }
+    }
+
+    func resetToPreset() {
+        if let p = Preset.named(basePreset) { applyPreset(p) }
+    }
+
+    var hasFaceStep: Bool { signature.items.contains { $0.operation == .face } }
+
     // MARK: Steps
 
+    /// The server offers this operation (an older one may lack unblur).
+    func canOffer(_ op: PainiteKit.Operation) -> Bool {
+        server.capabilities.map { $0.operation(op) != nil } ?? true
+    }
+
     func canAdd(_ op: PainiteKit.Operation) -> Bool {
-        // An older server may not offer every operation (e.g. unblur).
-        let offered = server.capabilities.map { $0.operation(op) != nil } ?? true
-        return offered && Recipe.canAdd(op, to: steps) && !export.isRunning
+        canOffer(op) && Recipe.canAdd(op, to: steps) && !export.isRunning
     }
 
     func addStep(_ op: PainiteKit.Operation) {
@@ -157,6 +203,33 @@ final class DocumentModel: ObservableObject {
         let j = i + offset
         guard steps.indices.contains(j) else { return }
         steps.swapAt(i, j)
+    }
+
+    /// Drag to reorder (SwiftUI onMove offsets).
+    func moveSteps(from source: IndexSet, to destination: Int) {
+        steps = Recipe.moving(steps, from: source, to: destination)
+    }
+
+    func duplicateStep(_ id: UUID) {
+        guard let i = steps.firstIndex(where: { $0.id == id }), canAdd(steps[i].operation) else { return }
+        var copy = steps[i]
+        copy = RecipeStep(operation: copy.operation, strength: copy.strength, enabled: copy.enabled)
+        steps.insert(copy, at: i + 1)
+    }
+
+    /// Turns every other step off; soloing the only enabled step turns them all back on.
+    func soloStep(_ id: UUID) {
+        let alreadySolo = steps.allSatisfy { $0.enabled == ($0.id == id) }
+        steps = steps.map { s in
+            var s = s
+            s.enabled = alreadySolo ? true : s.id == id
+            return s
+        }
+    }
+
+    func canDuplicate(_ id: UUID) -> Bool {
+        guard let s = steps.first(where: { $0.id == id }) else { return false }
+        return canAdd(s.operation)
     }
 
     /// The model the server will use (or the preview used) for the i-th enabled step.
@@ -267,8 +340,11 @@ final class DocumentModel: ObservableObject {
         guard image != nil, imageSize.width > 0,
               let r = PreviewGeometry.requestRegion(visible: rect, imageSize: imageSize, scale: Recipe.scale(signature))
         else { return }
-        selection = CGRect(x: r.x, y: r.y, width: r.w, height: r.h)
+        let picked = CGRect(x: r.x, y: r.y, width: r.w, height: r.h)
+        let isNew = picked != selection
+        selection = picked
         viewport?.setSelection(selection)
+        if isNew { viewport?.centerDivider(on: picked) }
         updatePreviewBox()
         schedulePreview(after: 0)
     }
@@ -304,7 +380,31 @@ final class DocumentModel: ObservableObject {
         case .failed: state = .failed
         default: state = targetRegion() == preview?.region && previewIsCurrent ? .ready : .pending
         }
-        viewport?.setPreviewBox(targetRegion(), state: state)
+        let target = targetRegion()
+        var label = ""
+        if let target {
+            let s = Recipe.scale(signature)
+            label = "Preview area  \(target.w * s) × \(target.h * s)"
+        }
+        viewport?.setPreviewBox(target, state: state, label: label)
+    }
+
+    /// What the After tag says.
+    enum AfterStatus: Equatable {
+        case noSteps
+        case current(String)
+        case updating(Double?)
+        case failed(String)
+    }
+
+    var afterStatus: AfterStatus {
+        if signature.items.isEmpty { return .noSteps }
+        switch previewState {
+        case .rendering(let p): return .updating(p)
+        case .failed(let msg): return .failed(msg)
+        case .ready where previewIsCurrent: return .current(Recipe.shortLabel(preview?.signature ?? signature))
+        default: return .updating(nil)
+        }
     }
 
     private func settingsChanged() {
@@ -312,7 +412,8 @@ final class DocumentModel: ObservableObject {
         if case .done = export { export = .idle }
         if case .failed = export { export = .idle }
         updatePreviewBox()
-        schedulePreview(after: 0.25)
+        // While a slider is held, wait for its release.
+        if !isAdjusting { schedulePreview(after: 0.25) }
     }
 
     func retryPreview() {
@@ -456,6 +557,15 @@ final class DocumentModel: ObservableObject {
     // MARK: Export
 
     var canSaveInPlace: Bool { handoff.canSaveInPlace && sourceFormat != nil }
+
+    /// Saved over Lightroom's copy, with no changes since.
+    var savedToLightroom: Bool {
+        if case .done(_, true) = export { return true }
+        return false
+    }
+
+    /// The user chose to close a Lightroom photo without saving.
+    var closeWithoutSaving = false
 
     /// Lightroom handoff: replace the handed-over file, same format, then Finish in Lightroom.
     func saveInPlace() {
