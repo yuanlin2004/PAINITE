@@ -173,15 +173,15 @@ public struct JobRequest: Codable, Sendable, Equatable {
     /// also works with servers that predate pipelines.
     public init(sourceId: String, kind: JobKind, steps: [Step], region: Region?, format: ImageFormat?,
                 jpegQuality: Int? = nil) {
-        if steps.count == 1 {
-            let s = steps[0]
-            self.init(sourceId: sourceId, kind: kind, operation: s.operation, strength: s.params?.strength,
-                      model: s.model, region: region, format: format, jpegQuality: jpegQuality)
-            return
-        }
         self.sourceId = sourceId
         self.kind = kind
-        self.steps = steps
+        if steps.count == 1 {
+            operation = steps[0].operation
+            params = steps[0].params
+            model = steps[0].model
+        } else {
+            self.steps = steps
+        }
         self.region = region
         if format != nil || jpegQuality != nil {
             output = Output(format: format, jpegQuality: jpegQuality)
