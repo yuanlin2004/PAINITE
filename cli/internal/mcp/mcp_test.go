@@ -484,6 +484,10 @@ func TestPreview(t *testing.T) {
 	if st["faces"] == nil || st["saved_to"] != saved {
 		t.Errorf("info = %v", st)
 	}
+	if text := r["content"].([]any)[0].(map[string]any)["text"].(string); !strings.Contains(text,
+		"1 face found: 1 enhanced.") {
+		t.Errorf("summary = %q", text)
+	}
 	var img map[string]any
 	for _, c := range r["content"].([]any) {
 		if c.(map[string]any)["type"] == "image" {

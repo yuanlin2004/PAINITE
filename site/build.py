@@ -2,12 +2,14 @@
 
 Each page in pages/ starts with `title:` and `description:` lines, then a line
 holding `---`, then the page's HTML body. This script wraps each body in the
-shared header and footer and copies assets/. No dependencies.
+shared header and footer and copies assets/. {{version}} in a page becomes the
+release its download links point at (see release_version). No dependencies.
 
     python3 site/build.py && open site/_site/index.html
 """
 import html
 import json
+import os
 import pathlib
 import re
 import shutil
@@ -109,17 +111,31 @@ def expand_samples(body: str, samples: dict) -> str:
                   f"<figcaption>{samples[m[1]]['caption']}</figcaption></figure>", body)
 
 
+def release_version() -> str:
+    """The version the download links point at, without the leading v.
+
+    PAINITE_VERSION (set by the Pages workflow to the latest published
+    release) wins; otherwise the newest docs/release-notes/v*.md.
+    """
+    if v := os.environ.get("PAINITE_VERSION", "").strip():
+        return v.removeprefix("v")
+    notes = (ROOT.parent / "docs" / "release-notes").glob("v*.md")
+    versions = [tuple(int(x) for x in n.stem[1:].split(".")) for n in notes if re.fullmatch(r"v\d+\.\d+\.\d+", n.stem)]
+    return ".".join(map(str, max(versions)))
+
+
 def main() -> None:
     shutil.rmtree(OUT, ignore_errors=True)
     shutil.copytree(ROOT / "assets", OUT / "assets")
     (OUT / ".nojekyll").touch()
     samples = json.loads((ROOT / "assets" / "samples" / "samples.json").read_text())
+    version = release_version()
     for f in sorted((ROOT / "pages").glob("*.html")):
         head, body = f.read_text().split("\n---\n", 1)
-        body = expand_samples(body, samples)
+        body = expand_samples(body, samples).replace("{{version}}", version)
         meta = dict(line.split(": ", 1) for line in head.strip().splitlines())
         (OUT / f.name).write_text(page(f.name, meta["title"], body.strip("\n"), meta["description"]))
-    print(f"built {OUT}")
+    print(f"built {OUT} (downloads: v{version})")
 
 
 if __name__ == "__main__":

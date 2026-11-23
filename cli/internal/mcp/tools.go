@@ -90,7 +90,7 @@ func NewServer(version string, client ClientFunc) *Server {
 					"preview is pixel-identical to the same region of a full result. The returned image is " +
 					"scaled down to fit 1024 px; pass output to also save it at full size. For face, faces " +
 					"lists every face in the whole photo in full-photo coordinates, not only those in the " +
-					"region. A new preview of a photo replaces any unfinished earlier preview of the same photo.",
+					"region, and the summary counts them. A new preview of a photo replaces any unfinished earlier preview of the same photo.",
 				InputSchema: object(map[string]any{
 					"input": map[string]any{"type": "string", "description": "Absolute path of the photo."},
 					"steps": stepsSchema,
@@ -526,10 +526,38 @@ func (t *tools) preview(ctx context.Context, c *Call) *Result {
 	if rg := job.Region; rg != nil {
 		summary = fmt.Sprintf("Preview of x=%d y=%d w=%d h=%d with %s.", rg.X, rg.Y, rg.W, rg.H, job.Model)
 	}
+	if faces, ok := info["faces"].([]any); ok {
+		summary += " " + faceSummary(faces)
+	}
 	r := TextResult(summary, info)
 	r.Content = append(r.Content, map[string]any{"type": "image", "mimeType": "image/jpeg",
 		"data": base64.StdEncoding.EncodeToString(inline)})
 	return r
+}
+
+// faceSummary counts faces by status, for example "4 faces found: 3 enhanced, 1 too_small.".
+func faceSummary(faces []any) string {
+	if len(faces) == 0 {
+		return "No faces found."
+	}
+	counts := map[string]int{}
+	var order []string
+	for _, f := range faces {
+		st, _ := f.(map[string]any)["status"].(string)
+		if counts[st] == 0 {
+			order = append(order, st)
+		}
+		counts[st]++
+	}
+	parts := make([]string, len(order))
+	for i, st := range order {
+		parts[i] = fmt.Sprintf("%d %s", counts[st], st)
+	}
+	noun := "faces"
+	if len(faces) == 1 {
+		noun = "face"
+	}
+	return fmt.Sprintf("%d %s found: %s.", len(faces), noun, strings.Join(parts, ", "))
 }
 
 // centerRegion is a default preview square at the center of a JPEG, or at

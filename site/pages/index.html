@@ -1,14 +1,14 @@
 title: Home
-description: PAINITE is an AI photo enhancement app for Mac and a command line tool for macOS and Linux, powered by your own GPU server.
+description: PAINITE is an AI photo enhancement app for Mac, a command line tool for macOS and Linux, and an MCP server for AI agents, powered by your own GPU server.
 ---
 <section class="hero">
   <div>
     <img class="logo-light" src="assets/logo.svg" alt="PAINITE — Photo Brilliance" width="440" height="140">
     <img class="logo-dark" src="assets/logo-dark.svg" alt="PAINITE — Photo Brilliance" width="440" height="140">
-    <p class="lede">AI photo enhancement that runs on your own GPU server. Remove noise, sharpen, fix camera shake and missed focus, restore faces and upscale, from a Mac app, from Lightroom, or from the command line.</p>
+    <p class="lede">AI photo enhancement that runs on your own GPU server. Remove noise, sharpen, fix camera shake and missed focus, restore faces and upscale, from a Mac app, from Lightroom, from the command line, or by asking an AI agent such as Claude.</p>
     <div class="buttons">
       <a class="btn primary" href="install.html">Get started</a>
-      <a class="btn" href="https://github.com/yuanlin2004/PAINITE/releases/latest">Download v1.0</a>
+      <a class="btn" href="https://github.com/yuanlin2004/PAINITE/releases/latest">Download v{{version}}</a>
       <a class="btn" href="#examples">See examples</a>
     </div>
   </div>
@@ -31,8 +31,8 @@ description: PAINITE is an AI photo enhancement app for Mac and a command line t
     <p>The PAINITE server runs the AI models on an NVIDIA GPU machine on your network. It was built for the <strong>NVIDIA DGX Spark</strong>. Your photos never leave your network.</p>
   </div>
   <div class="card">
-    <h3>2. Enhance from your Mac or terminal</h3>
-    <p>The <strong>Mac app</strong> shows a live before/after preview of the area you choose, then exports the full photo. The <strong><code>painite</code> command</strong> runs batches on macOS or Linux.</p>
+    <h3>2. Enhance from your Mac, terminal or agent</h3>
+    <p>The <strong>Mac app</strong> shows a live before/after preview of the area you choose, then exports the full photo. The <strong><code>painite</code> command</strong> runs batches on macOS or Linux, and its <strong><a href="agents.html">MCP server</a></strong> lets AI agents like Claude Code and Claude Desktop preview and enhance photos for you.</p>
   </div>
   <div class="card">
     <h3>3. Keep your workflow</h3>
@@ -51,14 +51,14 @@ description: PAINITE is an AI photo enhancement app for Mac and a command line t
 <table class="downloads">
   <thead><tr><th>Component</th><th>Runs on</th><th>Download</th></tr></thead>
   <tbody>
-    <tr><td>Server</td><td>NVIDIA DGX Spark, or a Linux PC with an NVIDIA GPU such as the RTX 4070 (Ubuntu, Docker, NVIDIA Container Toolkit)</td><td><a href="https://github.com/yuanlin2004/PAINITE/releases/download/v1.0.0/painite-server_1.0.0.tar.gz">painite-server_1.0.0.tar.gz</a></td></tr>
-    <tr><td>Mac app</td><td>macOS 14 or later, Apple silicon</td><td><a href="https://github.com/yuanlin2004/PAINITE/releases/download/v1.0.0/PAINITE_1.0.0_macos_arm64.zip">PAINITE_1.0.0_macos_arm64.zip</a></td></tr>
-    <tr><td>Command line</td><td>Ubuntu 24.04+ (x86-64, ARM64)</td><td><a href="https://github.com/yuanlin2004/PAINITE/releases/download/v1.0.0/painite_1.0.0_amd64.deb">.deb amd64</a> · <a href="https://github.com/yuanlin2004/PAINITE/releases/download/v1.0.0/painite_1.0.0_arm64.deb">.deb arm64</a></td></tr>
-    <tr><td>Command line</td><td>macOS (Apple silicon), other Linux</td><td><a href="https://github.com/yuanlin2004/PAINITE/releases/download/v1.0.0/painite_1.0.0_darwin_arm64.tar.gz">macOS</a> · <a href="https://github.com/yuanlin2004/PAINITE/releases/download/v1.0.0/painite_1.0.0_linux_amd64.tar.gz">Linux x86-64</a> · <a href="https://github.com/yuanlin2004/PAINITE/releases/download/v1.0.0/painite_1.0.0_linux_arm64.tar.gz">Linux ARM64</a></td></tr>
+    <tr><td>Server</td><td>NVIDIA DGX Spark, or a Linux PC with an NVIDIA GPU such as the RTX 4070 (Ubuntu, Docker, NVIDIA Container Toolkit)</td><td><a href="https://github.com/yuanlin2004/PAINITE/releases/download/v{{version}}/painite-server_{{version}}.tar.gz">painite-server_{{version}}.tar.gz</a></td></tr>
+    <tr><td>Mac app</td><td>macOS 14 or later, Apple silicon</td><td><a href="https://github.com/yuanlin2004/PAINITE/releases/download/v{{version}}/PAINITE_{{version}}_macos_arm64.zip">PAINITE_{{version}}_macos_arm64.zip</a></td></tr>
+    <tr><td>Command line and MCP server</td><td>Ubuntu 24.04+ (x86-64, ARM64)</td><td><a href="https://github.com/yuanlin2004/PAINITE/releases/download/v{{version}}/painite_{{version}}_amd64.deb">.deb amd64</a> · <a href="https://github.com/yuanlin2004/PAINITE/releases/download/v{{version}}/painite_{{version}}_arm64.deb">.deb arm64</a></td></tr>
+    <tr><td>Command line and MCP server</td><td>macOS (Apple silicon), other Linux</td><td><a href="https://github.com/yuanlin2004/PAINITE/releases/download/v{{version}}/painite_{{version}}_darwin_arm64.tar.gz">macOS</a> · <a href="https://github.com/yuanlin2004/PAINITE/releases/download/v{{version}}/painite_{{version}}_linux_amd64.tar.gz">Linux x86-64</a> · <a href="https://github.com/yuanlin2004/PAINITE/releases/download/v{{version}}/painite_{{version}}_linux_arm64.tar.gz">Linux ARM64</a></td></tr>
   </tbody>
 </table>
 </div>
-<p>Then follow the <a href="install.html">installation guide</a>. Checksums are listed on the <a href="https://github.com/yuanlin2004/PAINITE/releases/tag/v1.0.0">release page</a>.</p>
+<p>Then follow the <a href="install.html">installation guide</a>. Checksums are listed on the <a href="https://github.com/yuanlin2004/PAINITE/releases/tag/v{{version}}">release page</a>.</p>
 
 <h2>Open source</h2>
 <p>PAINITE is written by Yuan Lin and released under the <a href="https://github.com/yuanlin2004/PAINITE/blob/main/LICENSE">Apache License 2.0</a>. If you redistribute PAINITE or build on it, keep its <a href="https://github.com/yuanlin2004/PAINITE/blob/main/NOTICE">NOTICE</a> file with your copy. The AI models come from their authors under their own licenses. Some allow only non-commercial use; see <a href="help.html#licenses">model licenses</a>.</p>
