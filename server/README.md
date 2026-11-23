@@ -8,7 +8,9 @@ The PAINITE inference server (FastAPI). It implements the contract in
 `denoise/scunet-real-gan`, `sharpen/realesrgan-x2-down` (Real-ESRGAN 2x, then
 area downscale) and `upscale2x/nomosuni-esrgan-multijpg`, each followed by a
 low-frequency color anchor, plus `face/gpen-bfr-1024` (RetinaFace detection and GPEN-BFR-1024
-restoration of faces 128 to 1024 px, [bench/FACE_BAKEOFF.md](../bench/FACE_BAKEOFF.md)). Unblur
+restoration of faces 128 to 1024 px, [bench/FACE_BAKEOFF.md](../bench/FACE_BAKEOFF.md); since 1.1.0 a
+BiSeNet face parser limits the paste to the face itself, so hands, arms, hair and background near a
+face keep their original pixels, [bench/results/face/parse_mask](../bench/results/face/parse_mask/)). Unblur
 ([bench/UNBLUR.md](../bench/UNBLUR.md)) has two operations: `unblur_motion/stripformer-realblurj`
 for camera shake and `unblur_focus/lakdnet-defocus-lfdpdd-s` for missed focus. They run through the
 `torch_arch` adapter with network code vendored in `painite_server/models/arches/` (Stripformer:
