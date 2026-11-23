@@ -170,3 +170,85 @@ def test_blend_weights_sum_to_one(scale):
         assert (w > 0).all() and (w <= 1).all()
         total[lo:hi] += w
     np.testing.assert_allclose(total, 1, atol=1e-6)
+
+
+@dataclass
+class Counting(Model):
+    """WindowMean that counts its calls."""
+
+    receptive_padding: int = 4
+    calls: int = 0
+
+    def run(self, tile: np.ndarray) -> np.ndarray:
+        self.calls += 1
+        return 0.5 * tile + 0.5 * tile.mean(axis=(0, 1), keepdims=True)
+
+
+def test_inset_preview_runs_only_its_tiles_and_matches_export(tmp_path):
+    """A preview snapped inward by the blend band runs only the tiles under it
+    (2x2 here, no ring of neighbours) and still equals the export's pixels."""
+    from painite_server.imaging.geometry import snap_to_tiles
+
+    src = make_image(tmp_path / "in.tif", 150, 110, fmt="tiff")
+    m = Counting(id="denoise/count@1", operation="denoise", version="1")
+    kw = dict(steps=[pipeline.Step(m, {"strength": 0.7})], output={"format": "tiff"}, work_dir=tmp_path,
+              results_dir=tmp_path, tile=32, overlap=8, max_output_pixels=10**9,
+              on_progress=lambda p: None, is_canceled=lambda: False)
+    full = pipeline.run(src, region=None, job_id="full", **kw)
+    f = pixels(decode((tmp_path / full.path.name).read_bytes()))
+    region = snap_to_tiles(Rect(40, 40, 50, 50), 32, 150, 110, 4)
+    assert region == Rect(36, 36, 56, 56)
+    m.calls = 0
+    prev = pipeline.run(src, region=region, job_id="prev", **kw)
+    assert m.calls == 4
+    p = pixels(decode(prev.path.read_bytes()))
+    assert np.array_equal(p, f[36:92, 36:92])
+
+
+def test_tile_cache_skips_the_model_and_keeps_pixels(tmp_path):
+    """Changing only strength reuses cached model outputs; results stay identical
+    to an uncached run. Exports read the cache but don't fill it."""
+    from painite_server.imaging.tile_cache import TileCache
+
+    src = make_image(tmp_path / "in.tif", 150, 110, fmt="tiff")
+    m = Counting(id="denoise/count@1", operation="denoise", version="1")
+    mean = WindowMean(id="sharpen/mean@1", operation="sharpen", version="1")
+    cache = TileCache(64 * 1024 * 1024)
+    base = dict(output={"format": "tiff"}, work_dir=tmp_path, results_dir=tmp_path, tile=32, overlap=8,
+                max_output_pixels=10**9, on_progress=lambda p: None, is_canceled=lambda: False)
+    region = Rect(36, 36, 56, 56)
+
+    def run(strength, job, region=region, cached=True, write=True, chain=None):
+        st = chain or [pipeline.Step(m, {"strength": strength})]
+        out = pipeline.run(src, st, region, job_id=job, cache=cache if cached else None,
+                           cache_key=("owner", "sha"), cache_write=write, **base)
+        return pixels(decode(out.path.read_bytes()))
+
+    a = run(0.3, "a")
+    assert m.calls == 4
+    b = run(0.9, "b")
+    assert m.calls == 4  # only strength changed: no model runs
+    m.calls = 0
+    assert np.array_equal(b, run(0.9, "b2", cached=False))
+    assert m.calls == 4
+    assert not np.array_equal(a, b)
+    # A full export reads the 4 cached tiles and runs the rest without storing them.
+    m.calls = 0
+    n = len(cache)
+    full = run(0.9, "full", region=None, write=False)
+    assert m.calls == 5 * 4 - 4 and len(cache) == n
+    assert np.array_equal(full[36:92, 36:92], b)
+    # A later step's key includes the earlier steps, so a new strength upstream misses.
+    chain = [pipeline.Step(m, {"strength": 0.5}), pipeline.Step(mean, {"strength": 1.0})]
+    run(None, "c1", chain=chain)
+    chain2 = [pipeline.Step(m, {"strength": 0.6}), pipeline.Step(mean, {"strength": 1.0})]
+    assert np.array_equal(run(None, "c2", chain=chain2), run(None, "c3", chain=chain2, cached=False))
+
+
+def test_tile_cache_evicts_oldest():
+    from painite_server.imaging.tile_cache import TileCache
+
+    c = TileCache(3 * 400)
+    for i in range(4):
+        c.put(("s", i), np.zeros(100, np.float32))
+    assert c.get(("s", 0)) is None and c.get(("s", 3)) is not None and c.bytes == 1200

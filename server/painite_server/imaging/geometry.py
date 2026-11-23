@@ -77,10 +77,21 @@ def clip_rect(r: Rect, width: int, height: int) -> Rect | None:
     return Rect(x0, y0, x1 - x0, y1 - y0)
 
 
-def snap_to_tiles(r: Rect, tile: int, width: int, height: int) -> Rect:
-    """Grow a stored-pixel rect outward to whole tiles of the full image's grid."""
-    x0 = (r.x // tile) * tile
-    y0 = (r.y // tile) * tile
-    x1 = min(-(-(r.x + r.w) // tile) * tile, width)
-    y1 = min(-(-(r.y + r.h) // tile) * tile, height)
+def snap_to_tiles(r: Rect, tile: int, width: int, height: int, band: int = 0) -> Rect:
+    """Grow a stored-pixel rect outward to the full image's tile grid, inset by
+    the blend band: edges land on `k*tile + band` (left/top) and `k*tile - band`
+    (right/bottom), or on the image edge. A pixel within `band` of a tile edge
+    is a cross-fade of both tiles, so an edge exactly on the grid would need the
+    whole neighbouring tile; inset edges need only the tiles under the region.
+    With band 0 this is a plain outward snap to whole tiles."""
+    x0, x1 = _snap_axis(r.x, r.x + r.w, tile, width, band)
+    y0, y1 = _snap_axis(r.y, r.y + r.h, tile, height, band)
     return Rect(x0, y0, x1 - x0, y1 - y0)
+
+
+def _snap_axis(lo: int, hi: int, tile: int, size: int, band: int) -> tuple[int, int]:
+    k0 = max((lo - band) // tile, 0)
+    k1 = -(-(hi + band) // tile)
+    a = 0 if k0 == 0 else k0 * tile + band
+    b = size if k1 * tile >= size else k1 * tile - band
+    return a, b

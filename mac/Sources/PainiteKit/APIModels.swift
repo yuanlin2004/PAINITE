@@ -90,6 +90,8 @@ public struct Capabilities: Codable, Sendable, Equatable {
         public var queueCapacity: Int
         public var resultRetentionSeconds: Int?
         public var tileSize: Int?
+        /// Blend band; previews snap to the tile grid inset by it. Nil on older servers.
+        public var tileBand: Int?
     }
 
     public struct Formats: Codable, Sendable, Equatable {

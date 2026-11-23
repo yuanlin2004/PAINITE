@@ -26,3 +26,17 @@ def test_orientation_6_maps_top_left_to_bottom_left():
 def test_snap():
     assert snap_to_tiles(Rect(70, 30, 40, 50), 64, 200, 150) == Rect(64, 0, 64, 128)
     assert snap_to_tiles(Rect(130, 140, 5, 5), 64, 150, 150) == Rect(128, 128, 22, 22)
+
+
+def test_snap_inset_by_blend_band():
+    # A region inside 2x2 tiles, at least `band` from their outer edges, needs only those tiles.
+    assert snap_to_tiles(Rect(544, 544, 960, 960), 512, 6000, 4000, 32) == Rect(544, 544, 960, 960)
+    # A region ending on the grid would need the next tile, so the snap moves to its inset edge.
+    assert snap_to_tiles(Rect(512, 512, 1024, 1024), 512, 6000, 4000, 32) == Rect(0, 0, 2016, 2016)
+    # Image edges are never inset; nothing past them.
+    assert snap_to_tiles(Rect(10, 10, 100, 100), 512, 6000, 4000, 32) == Rect(0, 0, 480, 480)
+    assert snap_to_tiles(Rect(5900, 3900, 50, 50), 512, 6000, 4000, 32) == Rect(5664, 3616, 336, 384)
+    # Idempotent.
+    for r in (Rect(100, 700, 1234, 77), Rect(0, 0, 6000, 4000), Rect(5000, 10, 999, 3989)):
+        s = snap_to_tiles(r, 512, 6000, 4000, 32)
+        assert snap_to_tiles(s, 512, 6000, 4000, 32) == s

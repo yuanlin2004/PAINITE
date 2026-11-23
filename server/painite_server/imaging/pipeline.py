@@ -8,6 +8,7 @@ output; libvips updates EXIF dimension and resolution tags on save.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import time
 from collections.abc import Callable
@@ -20,6 +21,7 @@ import pyvips
 from ..errors import ApiError
 from ..models import Model
 from .geometry import Rect, display_point_to_stored, displayed_size, stored_rect_to_display
+from .tile_cache import TileCache
 
 LOADERS = {"jpegload": "jpeg", "jpegload_source": "jpeg", "tiffload": "tiff", "tiffload_source": "tiff"}
 FORMAT_EXT = {"jpeg": ".jpg", "tiff": ".tif"}
@@ -123,13 +125,19 @@ def run(
     max_output_pixels: int,
     on_progress: Callable[[float], None],
     is_canceled: Callable[[], bool],
+    cache: TileCache | None = None,
+    cache_key: tuple | None = None,
+    cache_write: bool = False,
 ) -> JobOutput:
     """Run `steps` in order over `region` (stored pixels, snapped to the tile
     grid) or the whole image, and encode the result.
 
     Each step tiles its own input on a grid anchored at that input's origin,
     with real context around every tile, so a preview region reproduces the
-    same pixels as a full export even across several steps and an upscale."""
+    same pixels as a full export even across several steps and an upscale.
+
+    With a `cache` and a `cache_key` naming the source, model outputs per tile
+    window are looked up there (and stored, with `cache_write`); see tile_cache."""
     timings: dict[str, float] = {"decode": 0.0, "inference": 0.0}
     src = _open(source_path)
     maxval = 65535.0 if src.format == "ushort" else 255.0
@@ -185,8 +193,12 @@ def run(
         def step_progress(p: float) -> None:
             on_progress((k - 1 + p) / n)
 
+        tiles = None
+        if cache is not None and cache_key is not None and not st.model.placeholder:
+            earlier = tuple((p.model.id, json.dumps(p.params, sort_keys=True)) for p in steps[:k - 1])
+            tiles = _TileStore(cache, (cache_key, earlier, st.model.id), cache_write)
         out = _process_tiles(window, local, (want.x, want.y), (in_w, in_h), st.model, st.params, tile, pad,
-                             band, step_progress, is_canceled)
+                             band, step_progress, is_canceled, tiles)
         timings["inference"] += (time.perf_counter() - t1) * 1000
         return out, Rect(area.x * sc, area.y * sc, area.w * sc, area.h * sc)
 
@@ -336,6 +348,7 @@ def _process_tiles(
     band: int,
     on_progress: Callable[[float], None],
     is_canceled: Callable[[], bool],
+    tiles: _TileStore | None = None,
 ) -> np.ndarray:
     """Run the model tile by tile over `area` (already snapped to the tile grid
     for previews). Each tile is fed with `overlap` pixels of real context from
@@ -373,7 +386,12 @@ def _process_tiles(
             if y0 < 0 or x0 < 0 or y1 > pixels.shape[0] or x1 > pixels.shape[1]:
                 raise ValueError("pixels do not cover the tile window")
             window = pixels[y0:y1, x0:x1]
-            enhanced = model.run(window)
+            span = (x0 + ox0, y0 + oy0, x1 + ox0, y1 + oy0)
+            enhanced = tiles.get(span) if tiles else None
+            if enhanced is None:
+                enhanced = model.run(window)
+                if tiles:
+                    tiles.put(span, enhanced)
             if strength is not None and s == 1:
                 # DESIGN.md 5.4: out = input + strength * (model(input) - input)
                 enhanced = window + float(strength) * (enhanced - window)
@@ -390,6 +408,21 @@ def _process_tiles(
             done += 1
             on_progress(done / total)
     return out / wsum
+
+
+@dataclass
+class _TileStore:
+    """One step's view of the tile cache: keys are `prefix + window span`."""
+    cache: TileCache
+    prefix: tuple
+    write: bool
+
+    def get(self, span: tuple) -> np.ndarray | None:
+        return self.cache.get((*self.prefix, span))
+
+    def put(self, span: tuple, value: np.ndarray) -> None:
+        if self.write:
+            self.cache.put((*self.prefix, span), value)
 
 
 def _blend_span(t: int, core: int, size: int, band: int, a0: int, alen: int, s: int):

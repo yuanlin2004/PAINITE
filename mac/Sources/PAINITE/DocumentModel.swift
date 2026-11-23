@@ -355,9 +355,21 @@ final class DocumentModel: ObservableObject {
     }
 
     /// The selection, capped to what one preview may cover with the current steps.
+    /// Snapped to the server's tile grid inset by its blend band, with at most
+    /// `PreviewGeometry.maxTiles` per side, so the server renders only the tiles
+    /// under the preview.
     private func wantedRegion() -> Region? {
         guard let selection, image != nil else { return nil }
-        return PreviewGeometry.requestRegion(visible: selection, imageSize: imageSize, scale: Recipe.scale(signature))
+        let scale = Recipe.scale(signature)
+        guard let r = PreviewGeometry.requestRegion(visible: selection, imageSize: imageSize, scale: scale) else {
+            return nil
+        }
+        guard let limits = server.capabilities?.limits, let tile = limits.tileSize, storedSize.width > 0 else { return r }
+        let gpu = server.health?.gpu
+        let slow = gpu.map { !$0.available || ($0.name ?? "").contains("MPS") } ?? false
+        return TileGrid.snap(r, storedWidth: storedSize.width, storedHeight: storedSize.height,
+                             orientation: orientation, tile: tile, band: limits.tileBand ?? 0,
+                             maxTiles: PreviewGeometry.maxTiles(scale: scale, slowServer: slow))
     }
 
     /// The box the next (or current) preview covers, exactly as the server will
@@ -368,9 +380,11 @@ final class DocumentModel: ObservableObject {
         if let p = preview, p.signature == sig, PreviewGeometry.covers(p.region, wanted) {
             return p.region
         }
-        guard let tile = server.capabilities?.limits.tileSize, storedSize.width > 0 else { return wanted }
+        guard let limits = server.capabilities?.limits, let tile = limits.tileSize, storedSize.width > 0 else {
+            return wanted
+        }
         return TileGrid.snap(wanted, storedWidth: storedSize.width, storedHeight: storedSize.height,
-                             orientation: orientation, tile: tile)
+                             orientation: orientation, tile: tile, band: limits.tileBand ?? 0)
     }
 
     private func updatePreviewBox() {

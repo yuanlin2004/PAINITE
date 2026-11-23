@@ -38,6 +38,9 @@ class Settings:
     sweep_interval_s: int = field(default_factory=lambda: _env_int("PAINITE_SWEEP_INTERVAL_S", 60))
     tile_size: int = field(default_factory=lambda: _env_int("PAINITE_TILE_SIZE", 512))
     tile_overlap: int = field(default_factory=lambda: _env_int("PAINITE_TILE_OVERLAP", 64))
+    # Model outputs per tile kept in memory, so changing only strength, or a
+    # preview over tiles already rendered, skips the model (imaging/tile_cache.py).
+    tile_cache_mb: int = field(default_factory=lambda: _env_int("PAINITE_TILE_CACHE_MB", 512))
 
     @property
     def sources_dir(self) -> Path:

@@ -111,6 +111,27 @@ final class CATrustTests: XCTestCase {
 }
 
 final class TileGridTests: XCTestCase {
+    func testSnapInsetByBand() {
+        // Matches server/tests/test_geometry.py test_snap_inset_by_blend_band.
+        func snap(_ r: Region, max: Int? = nil) -> Region {
+            TileGrid.snap(r, storedWidth: 6000, storedHeight: 4000, orientation: 1, tile: 512, band: 32, maxTiles: max)
+        }
+        XCTAssertEqual(snap(Region(x: 544, y: 544, w: 960, h: 960)), Region(x: 544, y: 544, w: 960, h: 960))
+        XCTAssertEqual(snap(Region(x: 512, y: 512, w: 1024, h: 1024)), Region(x: 0, y: 0, w: 2016, h: 2016))
+        XCTAssertEqual(snap(Region(x: 10, y: 10, w: 100, h: 100)), Region(x: 0, y: 0, w: 480, h: 480))
+        XCTAssertEqual(snap(Region(x: 5900, y: 3900, w: 50, h: 50)), Region(x: 5664, y: 3616, w: 336, h: 384))
+        // A 2048 px request capped to 2x2 tiles around its middle (stored x 2024..4072 -> tiles 5, 6).
+        XCTAssertEqual(snap(Region(x: 2024, y: 976, w: 2048, h: 2048), max: 2), Region(x: 2592, y: 1568, w: 960, h: 960))
+        // At most 2 tiles per side, also at the image edge.
+        let e = snap(Region(x: 5000, y: 3000, w: 1000, h: 1000), max: 2)
+        XCTAssertEqual(e, Region(x: 5152, y: 3104, w: 848, h: 896))
+        // Idempotent, so the server keeps the app's region.
+        for r in [Region(x: 100, y: 700, w: 1234, h: 77), Region(x: 0, y: 0, w: 6000, h: 4000)] {
+            let s = snap(r, max: 2)
+            XCTAssertEqual(snap(s), s)
+        }
+    }
+
     func testSnapUnrotated() {
         let r = TileGrid.snap(Region(x: 600, y: 300, w: 200, h: 200), storedWidth: 1500, storedHeight: 1000, orientation: 1, tile: 512)
         XCTAssertEqual(r, Region(x: 512, y: 0, w: 512, h: 512))

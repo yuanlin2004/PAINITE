@@ -12,6 +12,7 @@ from ..config import Settings
 from ..errors import ApiError
 from ..imaging import pipeline
 from ..imaging.geometry import Rect
+from ..imaging.tile_cache import TileCache
 from ..models import Registry
 from ..store import Store, dumps
 
@@ -25,6 +26,7 @@ def source_path(settings: Settings, owner: str, sha: str) -> Path:
 class Worker:
     def __init__(self, settings: Settings, store: Store, registry: Registry):
         self.settings = settings
+        self.tile_cache = TileCache(settings.tile_cache_mb * 1024 * 1024)
         self.store = store
         self.registry = registry
         self._wake = threading.Event()
@@ -114,6 +116,9 @@ class Worker:
                 max_output_pixels=self.settings.max_output_pixels,
                 on_progress=on_progress,
                 is_canceled=is_canceled,
+                cache=self.tile_cache,
+                cache_key=(job["owner"], job["source_sha"]),
+                cache_write=job["kind"] == "preview",
             )
         except pipeline.Canceled:
             self._finish(job_id, "canceled", timings, started, code="canceled", message="canceled by client")
