@@ -5,20 +5,20 @@
 
 # PAINITE
 
-PAINITE is an AI photo enhancement project with a macOS app and a standalone CLI for macOS and Linux. Both send photos to a separate inference server for processing. NVIDIA DGX Spark is the initial server target. The server is also tested on an x86-64 Ubuntu PC with a GeForce RTX 4070 (12 GB), which needs NVIDIA driver 580 or newer.
+PAINITE is an AI photo enhancement project with a macOS app, a standalone CLI for macOS and Linux, and an MCP server so AI agents can use it. Both send photos to a separate inference server for processing. NVIDIA DGX Spark is the initial server target. The server is also tested on an x86-64 Ubuntu PC with a GeForce RTX 4070 (12 GB), which needs NVIDIA driver 580 or newer.
 
-**[User guide](https://yuanlin2004.github.io/PAINITE/)** · **[Download](https://github.com/yuanlin2004/PAINITE/releases/latest)** · [Release notes](docs/release-notes/v1.0.0.md)
+**[User guide](https://yuanlin2004.github.io/PAINITE/)** · **[Download](https://github.com/yuanlin2004/PAINITE/releases/latest)** · [Release notes](docs/release-notes/v1.1.0.md)
 
 ## Workflows
 
 | Mode | Workflow |
 | --- | --- |
-| Standalone Mac app | On macOS 27 or later (Apple silicon), open a photo, preview the enhancement against the original, and export the result. |
-| Standalone CLI | Enhance a single photo or batch on macOS 27 or later (Apple silicon) or Ubuntu 24.04 or later (x86-64 and ARM64). |
+| Standalone Mac app | On macOS 14 or later (Apple silicon), open a photo, preview the enhancement against the original, and export the result. |
+| Standalone CLI | Enhance a single photo or batch on macOS 14 or later (Apple silicon) or Ubuntu 24.04 or later (x86-64 and ARM64). |
 | AI agents (MCP) | Claude Code, Claude Desktop or another MCP client runs `painite mcp` to check the server, preview enhancements and enhance photos ([guide](https://yuanlin2004.github.io/PAINITE/agents.html)). |
 | Adobe Lightroom desktop | On a supported Mac, open a photo in PAINITE through **Edit in**, save the enhancement, then select **Finish** in Lightroom to bring it back. |
 
-Version 1.0 has six enhancements: denoise, sharpen, unblur (motion and focus), face restoration and 2× upscale. Up to four of them can run in one pass.
+Version 1.1 has six enhancements: denoise, sharpen, unblur (motion and focus), face restoration and 2× upscale. Up to four of them can run in one pass.
 
 ## Repository
 

@@ -22,9 +22,9 @@ description: Install the PAINITE server on an NVIDIA DGX Spark, then the Mac app
 <ol class="steps">
   <li>
     <p>Download and unpack the server on the DGX Spark:</p>
-<pre><code>curl -LO https://github.com/yuanlin2004/PAINITE/releases/download/v1.0.0/painite-server_1.0.0.tar.gz
-tar xzf painite-server_1.0.0.tar.gz
-cd painite-server_1.0.0</code></pre>
+<pre><code>curl -LO https://github.com/yuanlin2004/PAINITE/releases/download/v{{version}}/painite-server_{{version}}.tar.gz
+tar xzf painite-server_{{version}}.tar.gz
+cd painite-server_{{version}}</code></pre>
   </li>
   <li>
     <p>Run the installer:</p>
@@ -49,7 +49,7 @@ cd painite-server_1.0.0</code></pre>
 <h2 id="mac">3. Install the Mac app</h2>
 <p><strong>You need:</strong> a Mac with Apple silicon and macOS 14 or later.</p>
 <ol class="steps">
-  <li><p>Download <a href="https://github.com/yuanlin2004/PAINITE/releases/download/v1.0.0/PAINITE_1.0.0_macos_arm64.zip">PAINITE_1.0.0_macos_arm64.zip</a>, open it, and drag <strong>PAINITE</strong> to your Applications folder.</p></li>
+  <li><p>Download <a href="https://github.com/yuanlin2004/PAINITE/releases/download/v{{version}}/PAINITE_{{version}}_macos_arm64.zip">PAINITE_{{version}}_macos_arm64.zip</a>, open it, and drag <strong>PAINITE</strong> to your Applications folder.</p></li>
   <li>
     <p>Open PAINITE. This release isn't notarized by Apple yet, so macOS stops it the first time. Click <strong>Done</strong>, then open <strong>System Settings › Privacy &amp; Security</strong>, scroll down, and click <strong>Open Anyway</strong> next to the PAINITE message. You only need to do this once.</p>
     <p>Or, in Terminal: <code>xattr -dr com.apple.quarantine /Applications/PAINITE.app</code></p>
@@ -61,13 +61,13 @@ cd painite-server_1.0.0</code></pre>
 
 <h2 id="cli">4. Install the command line tool</h2>
 <h3>Ubuntu (x86-64 or ARM64)</h3>
-<pre><code>curl -LO https://github.com/yuanlin2004/PAINITE/releases/download/v1.0.0/painite_1.0.0_amd64.deb   # or _arm64.deb
-sudo apt install ./painite_1.0.0_amd64.deb</code></pre>
+<pre><code>curl -LO https://github.com/yuanlin2004/PAINITE/releases/download/v{{version}}/painite_{{version}}_amd64.deb   # or _arm64.deb
+sudo apt install ./painite_{{version}}_amd64.deb</code></pre>
 <h3>macOS (Apple silicon) and other Linux</h3>
-<pre><code>curl -LO https://github.com/yuanlin2004/PAINITE/releases/download/v1.0.0/painite_1.0.0_darwin_arm64.tar.gz
-tar xzf painite_1.0.0_darwin_arm64.tar.gz
+<pre><code>curl -LO https://github.com/yuanlin2004/PAINITE/releases/download/v{{version}}/painite_{{version}}_darwin_arm64.tar.gz
+tar xzf painite_{{version}}_darwin_arm64.tar.gz
 sudo install painite /usr/local/bin/</code></pre>
-<p>For Linux use <code>painite_1.0.0_linux_amd64.tar.gz</code> or <code>painite_1.0.0_linux_arm64.tar.gz</code>. Downloading with <code>curl</code> as shown avoids the macOS quarantine prompt.</p>
+<p>For Linux use <code>painite_{{version}}_linux_amd64.tar.gz</code> or <code>painite_{{version}}_linux_arm64.tar.gz</code>. Downloading with <code>curl</code> as shown avoids the macOS quarantine prompt.</p>
 <h3>Connect it to the server</h3>
 <pre><code>painite config set endpoint https://spark:8443
 painite trust --fingerprint SHA256:…        # the fingerprint from step 1
@@ -79,5 +79,5 @@ painite status</code></pre>
 <h2 id="upgrade">Upgrading</h2>
 <p><strong>Server:</strong> unpack the new release and run <code>sudo ./install.sh</code> again. Your certificate, tokens and models are kept. <strong>Mac app:</strong> replace the app in Applications. <strong>Command line:</strong> install the new package the same way.</p>
 <h3>Checksums</h3>
-<p>Each download has a SHA-256 checksum on the <a href="https://github.com/yuanlin2004/PAINITE/releases/tag/v1.0.0">release page</a>. To check the command line packages: <code>sha256sum -c --ignore-missing SHA256SUMS</code>.</p>
+<p>Each download has a SHA-256 checksum on the <a href="https://github.com/yuanlin2004/PAINITE/releases/tag/v{{version}}">release page</a>. To check the command line packages: <code>sha256sum -c --ignore-missing SHA256SUMS</code>.</p>
 </div>

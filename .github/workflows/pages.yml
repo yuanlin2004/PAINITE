@@ -8,6 +8,9 @@ on:
     paths: ["site/**", ".github/workflows/pages.yml"]
   pull_request:
     paths: ["site/**", ".github/workflows/pages.yml"]
+  # Publishing a release moves the guide's download links to it.
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
@@ -25,7 +28,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build
-        run: python3 site/build.py
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Point downloads at the latest published release; drafts don't count.
+          export PAINITE_VERSION=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName || true)
+          python3 site/build.py
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site/_site
