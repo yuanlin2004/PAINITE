@@ -6,10 +6,11 @@ mask of @1.1.0, on photos with a hand or an arm near a face.
       --out results/face/parse_mask photo.jpg photo2.jpg@x,y,w,h ...
 
 `@x,y,w,h` frames that region (upright pixels) instead of each face's box.
-Writes <name>.jpg per photo (rows: faces or the framed region; columns:
-input | square mask | face parsing) and prints, per row, the mean change
-outside the face-parsing mask (where the square mask altered arms, hands,
-hair and background).
+Writes <name>.jpg per photo (rows: faces or the framed region, each with a
+change map below it, |output - input| x8; columns: input | square mask | face
+parsing) and prints, per row, the mean change outside the face over the area
+the square paste touched (arms, hands, hair and background in the square).
+--dump also saves the full-size input and both outputs as PNG.
 """
 import argparse
 import sys
@@ -19,8 +20,10 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "server"))
-import pyvips  # noqa: E402
+# PIL's FreeType binding before pyvips: the other way round, libvips' own
+# libfreetype is already loaded and PIL renders text with garbage metrics.
 from PIL import Image, ImageDraw, ImageFont  # noqa: E402
+import pyvips  # noqa: E402
 
 from painite_server.imaging import pipeline  # noqa: E402
 from painite_server.models import face_adapter  # noqa: E402
@@ -50,6 +53,7 @@ def main():
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--strength", type=float, default=0.5)
     ap.add_argument("--max-faces", type=int, default=3)
+    ap.add_argument("--dump", action="store_true", help="also save full-size PNGs")
     ap.add_argument("photos", nargs="+")
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
@@ -75,6 +79,9 @@ def main():
             sq, faces = render(src, square, a.strength, td, "square")
             pa, _ = render(src, parsed, a.strength, td, "parse")
         h, w = inp.shape[:2]
+        if a.dump:
+            for tag, im in (("input", inp), ("square", sq), ("parse", pa)):
+                Image.fromarray(im).save(a.out / f"{path.stem}_{tag}.png")
         if frame:
             x, y, fw, fh = (int(v) for v in frame.split(","))
             boxes = [(x, y, x + fw, y + fh)]
@@ -92,16 +99,26 @@ def main():
             # Pixels the square mask changed that face parsing kept: arms, hands, hair, background.
             dsq = np.abs(crops[1].astype(int) - crops[0]).max(-1)
             dpa = np.abs(crops[2].astype(int) - crops[0]).max(-1)
-            outside = dpa <= 1
-            print(f"  region {x0},{y0},{x1 - x0}x{y1 - y0}: mean change outside the face, "
-                  f"square {dsq[outside].mean():.2f} vs parse {dpa[outside].mean():.2f} (8-bit levels)")
+            # Outside the face (parsing left it alone) but inside the square paste (it changed something).
+            outside = (dpa <= 1) & (dsq >= 1)
+            share = outside.sum() / max(1, (dsq >= 1).sum())
+            print(f"  region {x0},{y0},{x1 - x0}x{y1 - y0}: mean change outside the face "
+                  f"({100 * share:.0f}% of the square paste), square {dsq[outside].mean():.2f} "
+                  f"vs parse {dpa[outside].mean():.2f} (8-bit levels)")
             sc = ROW_H / (y1 - y0)
-            tiles = [Image.fromarray(c).resize((max(1, round((x1 - x0) * sc)), ROW_H), Image.LANCZOS) for c in crops]
-            row = Image.new("RGB", (sum(t.width for t in tiles) + 16 * 2, ROW_H), "white")
+            size = (max(1, round((x1 - x0) * sc)), ROW_H)
+            tiles = [Image.fromarray(c).resize(size, Image.LANCZOS) for c in crops]
+            maps = [Image.new("RGB", size, "white")] + [
+                Image.fromarray(np.clip(8 * d, 0, 255).astype(np.uint8)).convert("RGB").resize(size, Image.BOX)
+                for d in (dsq, dpa)]
+            row = Image.new("RGB", (sum(t.width for t in tiles) + 16 * 2, 2 * ROW_H + 8), "white")
             xo = 0
-            for t in tiles:
+            for t, m in zip(tiles, maps):
                 row.paste(t, (xo, 0))
+                row.paste(m, (xo, ROW_H + 8))
                 xo += t.width + 16
+            ImageDraw.Draw(row).text((8, ROW_H + 20), "Change maps,\n|output - input| x8", fill="#555",
+                                     font=f_cap)
             rows.append(row)
         if not rows:
             print("  no enhanced faces")
