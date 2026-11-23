@@ -31,7 +31,7 @@
   },
   "pipeline": {
     "title": "Several steps at once",
-    "meta": "Noisy, soft, small · denoise 0.8 → sharpen 0.5 → upscale 2×",
-    "caption": "Up to four steps run in order in one pass on the server. Before is a bicubic enlargement. Noise, blur and size were simulated. Photo: Jebulon, CC0."
+    "meta": "Noisy, soft, small portrait · denoise 0.8 → upscale 2× → faces 0.8",
+    "caption": "Up to four steps run in order in one pass on the server. Before is a bicubic enlargement. Noise, blur and size were simulated. Photo: Josh Valcarcel, NASA, public domain."
   }
 }
