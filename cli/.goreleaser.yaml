@@ -52,8 +52,10 @@ checksum:
 snapshot:
   version_template: "{{ incpatch .Version }}-dev+{{ .ShortCommit }}"
 
+# The release text comes from docs/release-notes/<tag>.md (--release-notes).
+# Don't set changelog.disable: it also drops the --release-notes text.
 changelog:
-  disable: true
+  sort: asc
 
 release:
   draft: true
