@@ -21,8 +21,10 @@ Until they are installed, placeholder models (`denoise/identity`, `sharpen/ident
 ## Run locally
 
 Needs Python 3.11+ and libvips (`apt install libvips42`, `brew install vips`).
-Real models also need PyTorch with torchvision and `pip install -e '.[models]'`;
-without CUDA they run on the CPU, slowly.
+Real models also need PyTorch with torchvision and `pip install -e '.[models]'`.
+Models run on an NVIDIA GPU (CUDA) if there is one, else on an Apple Silicon GPU
+(MPS), else on the CPU, slowly. `PAINITE_DEVICE` (or `serve --device`) forces
+`cuda`, `mps` or `cpu`.
 
 ```sh
 cd server
@@ -40,6 +42,23 @@ From a release, unpack `painite-server_<version>.tar.gz` and run `sudo ./install
 after asking about their licenses, installs `/usr/local/bin/painite-server` (the
 admin commands below, run in the image) and the systemd service. The user guide
 covers it: https://yuanlin2004.github.io/PAINITE/install.html
+
+## Install on a Mac (Apple Silicon)
+
+Docker on a Mac has no GPU, so the server runs natively, with PyTorch on the
+Mac's GPU (MPS). From a release or from `server/` in a clone, run
+`./install-mac.sh` as yourself (not sudo; `--help` for options). It needs `uv`
+(`brew install uv`) or Python 3.11+. It makes a venv with PyTorch and a libvips
+wheel (no Homebrew vips), keeps everything in `~/Library/Application Support/painite-server`,
+pulls the models after asking about their licenses, installs
+`~/.local/bin/painite-server` and a launchd agent (`com.painite.server`, log in
+`~/Library/Logs/painite-server.log`) that serves `https://localhost:8443`.
+`--lan` also serves other computers; `--uninstall` removes the service and venv
+and keeps the data.
+
+On an M2 Pro (16 GB) a 24 MP job takes 1.2 to 2.1 minutes depending on the
+operation (spark1: about 0.5 minutes), previews take 20 to 33 s, and the server
+uses up to about 9 GB of memory.
 
 ## Run on DGX Spark (Docker, by hand)
 
