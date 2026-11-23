@@ -1,0 +1,43 @@
+title: What's new
+description: What changed in each PAINITE release: the server on a Mac, face restoration and faster previews in 1.2, AI agents in 1.1, and the first release.
+---
+<div class="prose">
+<p class="eyebrow">What's new</p>
+<h1>What's new in PAINITE</h1>
+<p class="lede">What changed in each release, newest first. Full details and downloads are in the <a href="https://github.com/yuanlin2004/PAINITE/releases">release notes</a>.</p>
+
+<div class="toc">
+  <strong>Releases</strong>
+  <ul>
+    <li><a href="#v1-2">PAINITE 1.2</a> · November 23, 2026</li>
+    <li><a href="#v1-1">PAINITE 1.1</a> · November 22, 2026</li>
+    <li><a href="#v1-0">PAINITE 1.0</a> · November 22, 2026</li>
+  </ul>
+</div>
+
+<h2 id="v1-2">PAINITE 1.2</h2>
+<p><small>November 23, 2026 · <a href="https://github.com/yuanlin2004/PAINITE/releases/tag/v1.2.0">Release notes</a></small></p>
+<h3>Run the server on your Mac</h3>
+<p>The server now runs on a Mac with Apple silicon, using the Mac's GPU, with no Docker. You no longer need an NVIDIA machine to try PAINITE, and the Mac app can use a server on the same Mac. The server download includes <code>install-mac.sh</code>; see <a href="install.html#mac-server">Server on a Mac</a>. On an M2 Pro, previews take 3 to 5 seconds and a 24-megapixel photo takes 1 to 2 minutes.</p>
+<h3>Face restoration changes only the face</h3>
+<p>The <a href="enhancements.html#face">Face</a> enhancement now finds the face's own pixels and restores only those. Hands, fingers, arms, hair, scarves and background next to a face keep their original pixels, and there's no bright halo around hair against the sky. Existing servers need the new face model: see <a href="install.html#upgrade">Upgrading</a>.</p>
+<h3>Faster previews</h3>
+<p>The server renders only the part of the photo under the preview and remembers recent results, so a first preview takes about 4 seconds instead of 17 on a DGX Spark, and changing only the strength updates it in under a second. Previews still match the export pixel for pixel. The 1.2 Mac app's preview area is slightly smaller than before, so that it lines up with the server's tiles.</p>
+
+<h2 id="v1-1">PAINITE 1.1</h2>
+<p><small>November 22, 2026 · <a href="https://github.com/yuanlin2004/PAINITE/releases/tag/v1.1.0">Release notes</a></small></p>
+<h3>AI agents can use PAINITE</h3>
+<p>The <code>painite</code> command includes an MCP server, <code>painite mcp</code>. Claude Code, Claude Desktop and other MCP clients can check your server, preview an enhancement and enhance photos on your computer for you. See <a href="agents.html">AI agents</a>.</p>
+<h3>More tested hardware</h3>
+<p>The server is tested on a Ubuntu PC with a GeForce RTX 4070 (12 GB), which needs NVIDIA driver 580 or newer.</p>
+
+<h2 id="v1-0">PAINITE 1.0</h2>
+<p><small>November 22, 2026 · <a href="https://github.com/yuanlin2004/PAINITE/releases/tag/v1.0.0">Release notes</a></small></p>
+<p>The first release: AI photo enhancement on your own GPU server.</p>
+<ul>
+  <li><strong>Six <a href="enhancements.html">enhancements</a>:</strong> denoise, sharpen, unblur (motion and focus), face restoration and 2× upscale. Up to four run in one pass.</li>
+  <li><strong><a href="mac.html">Mac app</a>:</strong> a live before/after preview of the area you choose, presets, and exports that keep the color profile and metadata. Works as a Lightroom desktop <strong>Edit in</strong> editor.</li>
+  <li><strong><a href="cli.html">Command line</a>:</strong> <code>painite</code> for macOS and Linux, for single photos and batches.</li>
+  <li><strong><a href="install.html">Server</a>:</strong> one installer for the NVIDIA DGX Spark, with a private certificate, per-computer tokens and model downloads after you accept their licenses.</li>
+</ul>
+</div>
