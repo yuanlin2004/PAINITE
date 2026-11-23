@@ -1,6 +1,14 @@
 """Face enhancement: detect faces on the whole image, align each one to the
 FFHQ 512 template, restore the aligned crop, and paste it back with a soft mask.
 
+The paste mask covers only the face itself when the manifest names a face
+parser: a BiSeNet face-parsing model labels the restored crop, and only skin,
+brows, eyes, glasses, ears, nose and lips connected to the middle of the face
+are replaced. Hands, arms, hair, neck, clothes and background inside the
+square crop keep their input pixels (otherwise the restorer turns a nearby arm
+into blotchy "face skin"). Without a parser the mask is a feathered square, as
+in face models before 1.1.0.
+
 Unlike the tiled operations, a face needs the whole face (and detection needs
 the whole image), so this model runs once over the full image instead of tile
 by tile (`whole_image = True`, see imaging/pipeline.py:_run_whole_image).
@@ -25,6 +33,8 @@ Manifest config:
       "min_face": 24,                               # skip faces smaller than this (px)
       "max_face": 0,                                # skip faces larger than this (0: no limit)
       "mask_inset": 0.05, "mask_feather": 0.12,     # paste mask, as fractions of the crop
+      "parser": "parsing_bisenet.pth",              # optional face parser (BiSeNet, facexlib)
+      "parse_grow": 0.01, "parse_feather": 0.015,   # parse mask dilation and Gaussian sigma (crop fractions)
       "color_anchor_sigma": 8                       # 0 turns it off
     }
 
@@ -221,17 +231,92 @@ def _priors(h: int, w: int):
     return np.concatenate(out, 0)
 
 
+# Face-parsing paste mask ----------------------------------------------------
+
+# CelebAMask-HQ classes that the restored face replaces: skin, brows, eyes,
+# eyeglasses, ears, earring, nose, mouth, lips. Background, neck, necklace,
+# cloth, hair and hat keep the input, and so does anything else the parser
+# does not see as face, such as a hand or an arm.
+PARSE_KEEP = tuple(range(1, 14))
+_IMAGENET_MEAN = (0.485, 0.456, 0.406)
+_IMAGENET_STD = (0.229, 0.224, 0.225)
+# The middle of the face in the 512 template (eyes to mouth), which seeds the
+# face region: face pixels not connected to it are left alone.
+_CORE_512 = (193, 240, 319, 372)  # x0, y0, x1, y1
+
+
+def _reconstruct(marker, mask, max_iter: int = 1024):
+    """Morphological reconstruction: the parts of binary `mask` (1x1xHxW)
+    8-connected to `marker`."""
+    torch = _torch()
+    F = torch.nn.functional  # noqa: N806
+    r = marker * mask
+    for i in range(max_iter):
+        nxt = F.max_pool2d(r, 3, 1, 1) * mask
+        if i % 8 == 7 and torch.equal(nxt, r):
+            break
+        r = nxt
+    return r
+
+
+def face_region(keep, grid: int = 128):
+    """The face in a binary parse mask `keep` (1x1xSxS, template-aligned):
+    the face pixels connected to the eyes-to-mouth core, with enclosed holes
+    (a shadow or a beard the parser missed) filled. Returns a binary mask the
+    size of `keep`, or None when nothing at the core is face."""
+    torch = _torch()
+    F = torch.nn.functional  # noqa: N806
+    size = keep.shape[-1]
+    small = (F.interpolate(keep, size=(grid, grid), mode="area") > 0.5).float()
+    marker = torch.zeros_like(small)
+    x0, y0, x1, y1 = (round(v * grid / 512) for v in _CORE_512)
+    marker[..., y0:y1, x0:x1] = 1
+    comp = _reconstruct(marker, small)
+    if comp.sum() == 0:
+        return None
+    border = torch.ones_like(small)
+    border[..., 1:-1, 1:-1] = 0
+    filled = 1 - _reconstruct(border, 1 - comp)
+    # Back to full size: the parser's own edge where the component is, plus the holes.
+    def up(m):
+        return F.interpolate(m, size=(size, size), mode="nearest")
+    k = 2 * (size // grid) + 1
+    near = F.max_pool2d(up(comp), k, 1, k // 2)
+    return torch.clamp(keep * near + up(filled - comp), 0, 1)
+
+
+def soften(mask, grow: float, sigma: float):
+    """Dilate a binary mask (1x1xSxS) by `grow` and blur it with a Gaussian of
+    `sigma`, both as fractions of S, so the paste edge falls just outside the face."""
+    torch = _torch()
+    F = torch.nn.functional  # noqa: N806
+    size = mask.shape[-1]
+    k = 2 * round(grow * size) + 1
+    if k > 1:
+        mask = F.max_pool2d(mask, k, 1, k // 2)
+    s = sigma * size
+    if s > 0:
+        r = max(1, int(math.ceil(3 * s)))
+        g = torch.exp(-((torch.arange(-r, r + 1, device=mask.device, dtype=mask.dtype) / s) ** 2) / 2)
+        g = (g / g.sum()).view(1, 1, 1, -1)
+        mask = F.conv2d(F.pad(mask, (r, r, 0, 0), mode="replicate"), g)
+        mask = F.conv2d(F.pad(mask, (0, 0, r, r), mode="replicate"), g.transpose(-1, -2))
+    return mask
+
+
 # The face model --------------------------------------------------------------
 
 @dataclass
 class FaceModel(Model):
     detector_path: Path = field(default=Path())
     restorer_path: Path = field(default=Path())
+    parser_path: Path | None = None
     config: dict[str, Any] = field(default_factory=dict)
     device: str = "auto"  # see devices.py
     whole_image: bool = True
     _det: Any = field(default=None, repr=False)
     _net: Any = field(default=None, repr=False)
+    _parser: Any = field(default=None, repr=False)
     _arch: str = field(default="", repr=False)
     _dtype: Any = field(default=None, repr=False)
     _cache: OrderedDict = field(default_factory=OrderedDict, repr=False)
@@ -262,6 +347,12 @@ class FaceModel(Model):
             sd = {k.removeprefix("module."): v for k, v in sd.items()}
             det.load_state_dict(sd, strict=True)
             self._det = det.to(self.device).eval()
+            if self.parser_path is not None:
+                from .bisenet_arch import BiSeNet  # noqa: PLC0415
+
+                parser = BiSeNet(num_class=19)
+                parser.load_state_dict(torch.load(str(self.parser_path), map_location="cpu", weights_only=True))
+                self._parser = parser.to(self.device).eval()
 
             args = self.config.get("restorer_args", {})
             dtype = self.config.get("dtype", "fp16")
@@ -289,7 +380,8 @@ class FaceModel(Model):
 
             configure_determinism()
             self._net = net
-            log.info("loaded %s (detector RetinaFace-R50, restorer %s, %s, %s)", self.id, arch_name, self.device, dtype)
+            log.info("loaded %s (detector RetinaFace-R50, restorer %s, %s, %s, %s mask)", self.id, arch_name,
+                     self.device, dtype, "face-parsing" if self._parser is not None else "square")
 
     # Detection -------------------------------------------------------------
 
@@ -405,6 +497,29 @@ class FaceModel(Model):
                 y = y[0] if isinstance(y, (tuple, list)) else y
         return ((y.float() + 1) / 2).clamp(0, 1)
 
+    def _parse_mask(self, img):
+        """Paste mask (1x1xSxS) from face parsing of `img`, a 1x3xSxS crop in
+        [0, 1], or None when the parser finds no face at its middle."""
+        torch = _torch()
+        F = torch.nn.functional  # noqa: N806
+        cfg = self.config
+        n = img.shape[-1]
+        x = img.float()
+        if n != 512:
+            x = F.interpolate(x, size=(512, 512), mode="area" if n > 512 else "bilinear", align_corners=None)
+        mean = torch.tensor(_IMAGENET_MEAN, device=x.device).view(1, 3, 1, 1)
+        std = torch.tensor(_IMAGENET_STD, device=x.device).view(1, 3, 1, 1)
+        with torch.inference_mode():
+            labels = self._parser((x - mean) / std).argmax(1, keepdim=True)
+            lut = torch.zeros(19, device=x.device)
+            lut[list(cfg.get("parse_keep", PARSE_KEEP))] = 1
+            region = face_region(lut[labels])
+            if region is None:
+                return None
+            if n != 512:
+                region = (F.interpolate(region, size=(n, n), mode="bilinear", align_corners=False) > 0.5).float()
+            return soften(region, float(cfg.get("parse_grow", 0.01)), float(cfg.get("parse_feather", 0.015)))
+
     def _sample(self, img, a_inv, b_inv, out_h, out_w, ox, oy):
         """Bilinear-sample `img` (1xCxHxW) at img_pt = a_inv @ (out_pt + (ox, oy)) + b_inv
         for each output pixel. Zero outside `img`."""
@@ -454,6 +569,10 @@ class FaceModel(Model):
             restored = color_anchor(restored, crop, sigma)
         mask = torch.from_numpy(crop_mask(n, float(cfg.get("mask_inset", 0.05)),
                                           float(cfg.get("mask_feather", 0.12))))[None, None].to(self.device)
+        if self._parser is not None:
+            face = self._parse_mask(restored)
+            if face is not None:
+                mask = mask * face
         # Back to the image: box pixel (u, v) -> img (u + x0, v + y0) -> crop a @ img + b.
         both = torch.cat([restored, mask], 1)
         back = self._sample(both, a, b, y1 - y0, x1 - x0, x0, y0)
@@ -515,6 +634,8 @@ def validate_config(config: dict[str, Any]) -> None:
     for key in ("detector", "restorer"):
         if not config.get(key):
             raise ValueError(f"config.{key} is required")
+    if "parser" in config and not config["parser"]:
+        raise ValueError("config.parser must name a file when set")
     if config.get("dtype", "fp16") not in ("fp16", "bf16", "fp32"):
         raise ValueError("config.dtype must be fp16, bf16 or fp32")
 
@@ -529,5 +650,6 @@ def make(manifest, path: Path) -> FaceModel:
         scale=1,
         detector_path=path / config["detector"],
         restorer_path=path / config["restorer"],
+        parser_path=path / config["parser"] if config.get("parser") else None,
         config=config,
     )

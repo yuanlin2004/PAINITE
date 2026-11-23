@@ -240,3 +240,100 @@ def test_jobs_without_a_face_step_report_no_faces(tmp_path):
     src = make_photo(tmp_path / "a.tif", 640, 300)
     render(tmp_path, src, IdentityModel(id="denoise/identity@0.1.0", operation="denoise", version="0.1.0"), None)
     assert render.last.info == {}
+
+
+# Face-parsing paste mask ------------------------------------------------------
+
+def test_bisenet_matches_the_facexlib_checkpoint_layout():
+    from painite_server.models.bisenet_arch import BiSeNet
+
+    sd = BiSeNet(num_class=19).state_dict()
+    for key in ("cp.resnet.conv1.weight", "cp.resnet.layer4.1.bn2.running_var", "cp.resnet.layer2.0.downsample.0.weight",
+                "cp.arm16.conv_atten.weight", "cp.arm32.bn_atten.bias", "cp.conv_avg.conv.weight",
+                "ffm.convblk.conv.weight", "ffm.conv2.weight", "conv_out.conv_out.weight",
+                "conv_out16.conv_out.weight", "conv_out32.conv.bn.running_mean"):
+        assert key in sd
+    assert sd["conv_out.conv_out.weight"].shape == (19, 256, 1, 1)
+
+
+def test_face_region_drops_detached_skin_and_fills_holes():
+    import torch
+
+    from painite_server.models.face_adapter import face_region
+
+    keep = torch.zeros(1, 1, 512, 512)
+    yy, xx = torch.meshgrid(torch.arange(512.0), torch.arange(512.0), indexing="ij")
+    keep[0, 0][((xx - 256) ** 2 + (yy - 300) ** 2) < 170 ** 2] = 1  # the face
+    keep[0, 0, 290:310, 240:270] = 0  # a hole (a shadow the parser missed)
+    keep[0, 0, 470:512, 0:120] = 1  # an arm, not touching the face
+    r = face_region(keep)
+    assert r[0, 0, 300, 256] == 1 and r[0, 0, 300, 400] == 1  # hole filled, face kept
+    assert r[0, 0, 490:512, 0:120].max() == 0  # the arm is gone
+    assert r[0, 0, 20, 20] == 0
+    assert face_region(torch.zeros(1, 1, 512, 512)) is None
+
+
+def test_soften_grows_and_feathers():
+    import torch
+
+    from painite_server.models.face_adapter import soften
+
+    m = torch.zeros(1, 1, 200, 200)
+    m[..., 50:150, 50:150] = 1
+    s = soften(m, 0.02, 0.01)
+    assert s[0, 0, 100, 100] > 0.999 and s[0, 0, 100, 0] < 1e-6
+    assert 0.2 < s[0, 0, 100, 154] < 0.8  # the edge moved out by about 4 px
+    assert torch.equal(soften(m, 0, 0), m)
+
+
+class _FakeParser:
+    """Labels a disk at the middle of the crop "skin", plus a detached blob at
+    the lower left (an arm next to the face), on the 512 parser input."""
+
+    def __call__(self, x):
+        import torch
+
+        yy, xx = torch.meshgrid(torch.arange(512.0), torch.arange(512.0), indexing="ij")
+        skin = (((xx - 256) ** 2 + (yy - 300) ** 2) < 150 ** 2) | ((xx >= 60) & (xx < 120) & (yy >= 400) & (yy < 470))
+        logits = torch.zeros(1, 19, 512, 512)
+        logits[0, 1][skin] = 1
+        logits[0, 0][~skin] = 1
+        return logits
+
+
+def _crop_to_image(model, crop_pt):
+    from painite_server.models.face_adapter import make_face
+
+    f = make_face(FACE_DISPLAYED, 0.99, model.config["face_size"], 640, 300)
+    return np.linalg.inv(np.array(f.a)) @ (np.asarray(crop_pt, float) - np.array(f.b))
+
+
+def test_parse_mask_leaves_a_nearby_arm_alone(tmp_path):
+    src = make_photo(tmp_path / "a.tif", 640, 300)
+    orig = pyvips.Image.new_from_file(str(src)).numpy().astype(int)
+
+    def with_parser(**config):
+        m = fake_face_model(**config)
+        load = m.load
+
+        def load_with_parser():
+            load()
+            m._parser = _FakeParser()
+
+        m.load = load_with_parser
+        return m
+
+    model = with_parser()
+    out = render(tmp_path, src, model, None, job="parse").astype(int)
+    square = render(tmp_path, src, fake_face_model(), None, job="square").astype(int)
+    # The arm blob (crop px (22, 109) of 128) is pasted by the square mask, not by the parse mask.
+    ax, ay = np.rint(_crop_to_image(model, (90 * 128 / 512, 435 * 128 / 512))).astype(int)
+    assert np.abs(square[ay, ax] - orig[ay, ax]).max() > 20
+    np.testing.assert_allclose(out[ay, ax], orig[ay, ax], atol=1)
+    # The face itself is still restored.
+    cx, cy = np.rint(_crop_to_image(model, (64, 75))).astype(int)
+    np.testing.assert_allclose(out[cy, cx], 255 - orig[cy, cx], atol=2)
+    # Preview == export still holds with the parse mask.
+    region = Rect(64, 64, 128, 128)
+    part = render(tmp_path, src, with_parser(), region, job="parse-prev").astype(int)
+    np.testing.assert_array_equal(part, out[region.y:region.y + region.h, region.x:region.x + region.w])

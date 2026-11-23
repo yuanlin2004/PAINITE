@@ -148,6 +148,16 @@ def test_registry_loads_installed_models_and_defaults(tmp_path):
     assert reg.get("upscale2x/up@1.0.0").scale == 2
 
 
+def test_newest_default_version_wins(tmp_path):
+    from painite_server.models import _version_key
+
+    assert _version_key("1.10.0") > _version_key("1.9.2") > _version_key("1.1.0") > _version_key("1.0.0")
+    data = tmp_path / "d"
+    for mid in ("denoise/aaa@1.0.0", "denoise/x@1.10.0", "denoise/x@1.9.0"):
+        mf.pull(mf.Manifest.load(_write_manifest(tmp_path, mid, "identity", default=True)), data)
+    assert default_registry(data).defaults["denoise"] == "denoise/x@1.10.0"
+
+
 def test_catalog_is_valid():
     for m in mf.catalog().values():
         assert m.files, m.id

@@ -27,7 +27,7 @@ def test_catalog_has_the_bakeoff_picks():
         "unblur_motion/stripformer-realblurj@1.0.0",
         "unblur_focus/lakdnet-defocus-lfdpdd-s@1.0.0",
         "upscale2x/nomosuni-esrgan-multijpg@1.0.0",
-        "face/gpen-bfr-1024@1.0.0",
+        "face/gpen-bfr-1024@1.1.0",
     }
     for m in cat.values():
         if m.adapter == "face":

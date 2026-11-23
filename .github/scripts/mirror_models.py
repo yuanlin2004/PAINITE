@@ -35,8 +35,9 @@ back to the upstream URL; every file is checked against the SHA-256 in its manif
 
 **These files are not part of PAINITE and are not covered by its Apache-2.0 license.** Each
 is redistributed unchanged under its authors' license, below. Some allow only
-non-commercial use. The LICENSE-* files here are the full texts for the two network
-definitions.
+non-commercial use. The LICENSE-* files here are full license texts: Stripformer and
+LaKDNet for their network definitions, and facexlib (MIT) for the RetinaFace detection and
+BiSeNet face-parsing weights used by the face model.
 
 | Model | License | Upstream |
 | --- | --- | --- |
