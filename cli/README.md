@@ -92,7 +92,7 @@ claude mcp add painite -- painite mcp
 Tools: `server_status`, `enhance_photos` (same validation, dedup, retries and
 verified atomic writes as `painite enhance`; progress notifications while it
 runs), `preview_enhancement` (renders a region, center by default, and returns
-it as an image scaled to 1568 px so the agent can see it), and `submit_job`,
+it as an image scaled to 1024 px so the agent can see it), and `submit_job`,
 `get_job` (optional `wait_seconds`), `download_result`, `cancel_job` for long
 batches. Tool errors use the CLI's stable error codes. The implementation is
 stdlib-only JSON-RPC in `internal/mcp`; it speaks MCP 2025-06-18, 2025-03-26 and

@@ -28,7 +28,7 @@ const (
 	maxInputs       = 50
 	maxPreviewSide  = 2048 // requested region side, before the server snaps it to tiles
 	defaultPreview  = 1024
-	inlineImageSide = 1568 // long edge of the image returned inline
+	inlineImageSide = 1024 // long edge of the image returned inline, to keep agent context small
 	maxWaitSeconds  = 120
 )
 
@@ -88,8 +88,9 @@ func NewServer(version string, client ClientFunc) *Server {
 				Description: "Render the enhancement for one region of a photo and return it as an image, so you " +
 					"can see the effect before a full run. The server grows the region to its tile grid; the " +
 					"preview is pixel-identical to the same region of a full result. The returned image is " +
-					"scaled down to fit 1568 px; pass output to also save it at full size. A new preview of a " +
-					"photo replaces any unfinished earlier preview of the same photo.",
+					"scaled down to fit 1024 px; pass output to also save it at full size. For face, faces " +
+					"lists every face in the whole photo in full-photo coordinates, not only those in the " +
+					"region. A new preview of a photo replaces any unfinished earlier preview of the same photo.",
 				InputSchema: object(map[string]any{
 					"input": map[string]any{"type": "string", "description": "Absolute path of the photo."},
 					"steps": stepsSchema,
@@ -808,9 +809,19 @@ func (t *tools) cancel(ctx context.Context, c *Call) *Result {
 	if err := client.CancelJob(ctx, a.JobID); err != nil {
 		return apiError(err)
 	}
+	// A running job stops at its next tile; wait briefly for the final state.
+	if job, err := client.GetJob(ctx, a.JobID); err == nil {
+		wctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		_, _ = enhance.Wait(wctx, client, job, nil)
+		cancel()
+	}
 	job, err := client.GetJobJSON(ctx, a.JobID)
 	if err != nil {
 		return apiError(err)
 	}
-	return TextResult(fmt.Sprintf("%s is %v.", a.JobID, job["state"]), job)
+	summary := fmt.Sprintf("%s is %v.", a.JobID, job["state"])
+	if job["state"] == "queued" || job["state"] == "running" {
+		summary = fmt.Sprintf("Cancel requested; %s is still %v. Check again with get_job.", a.JobID, job["state"])
+	}
+	return TextResult(summary, job)
 }

@@ -495,7 +495,7 @@ func TestPreview(t *testing.T) {
 	}
 	data, _ := base64.StdEncoding.DecodeString(img["data"].(string))
 	cfg, err := jpeg.DecodeConfig(bytes.NewReader(data))
-	if err != nil || cfg.Width != inlineImageSide || cfg.Height != 784 {
+	if err != nil || cfg.Width != inlineImageSide || cfg.Height != 512 {
 		t.Errorf("inline image %dx%d, %v", cfg.Width, cfg.Height, err)
 	}
 	if f, err := os.Open(saved); err != nil {

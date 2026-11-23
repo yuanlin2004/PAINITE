@@ -47,7 +47,7 @@ description: Let AI agents such as Claude Code and Claude Desktop enhance photos
   <tbody>
     <tr><td><code>server_status</code></td><td>Server health, GPU and queue, the enhancements with their strength ranges and default models, and limits.</td></tr>
     <tr><td><code>enhance_photos</code></td><td>Enhances one or more photos with one operation or a pipeline of up to four steps, and saves the results. Same rules as <a href="cli.html"><code>painite enhance</code></a>: everything is checked first, and existing files are kept unless the agent asks to overwrite them.</td></tr>
-    <tr><td><code>preview_enhancement</code></td><td>Renders one region of a photo (the center by default) and shows the result to the agent as an image. The preview matches the same region of a full run exactly. It can also save the preview as a JPEG.</td></tr>
+    <tr><td><code>preview_enhancement</code></td><td>Renders one region of a photo (the center by default) and shows the result to the agent as an image. The preview matches the same region of a full run exactly. It can also save the full-size preview as a JPEG. For <code>face</code>, it lists every face found in the whole photo.</td></tr>
     <tr><td><code>submit_job</code></td><td>Uploads a photo and starts a job without waiting, for long batches.</td></tr>
     <tr><td><code>get_job</code></td><td>A job's state, progress, timings and any faces found. It can wait up to two minutes for the job to finish.</td></tr>
     <tr><td><code>download_result</code></td><td>Saves a finished job's result, checked against the server's checksum, then deletes the server's copy.</td></tr>
