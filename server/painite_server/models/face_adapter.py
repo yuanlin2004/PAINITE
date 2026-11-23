@@ -312,7 +312,7 @@ class FaceModel(Model):
     restorer_path: Path = field(default=Path())
     parser_path: Path | None = None
     config: dict[str, Any] = field(default_factory=dict)
-    device: str = "cuda"
+    device: str = "auto"  # see devices.py
     whole_image: bool = True
     _det: Any = field(default=None, repr=False)
     _net: Any = field(default=None, repr=False)
@@ -339,9 +339,9 @@ class FaceModel(Model):
                 spandrel_extra_arches.install(ignore_duplicates=True)
             except ImportError:
                 pass
-            if self.device == "cuda" and not torch.cuda.is_available():
-                log.warning("CUDA is not available; running %s on the CPU (slow)", self.id)
-                self.device = "cpu"
+            from . import devices  # noqa: PLC0415
+
+            self.device = devices.resolve(self.device)
             det = _build_retinaface()
             sd = torch.load(str(self.detector_path), map_location="cpu", weights_only=True)
             sd = {k.removeprefix("module."): v for k, v in sd.items()}
@@ -397,7 +397,8 @@ class FaceModel(Model):
             x = torch.from_numpy(np.ascontiguousarray(small.transpose(2, 0, 1)))[None].to(self.device)
             bgr = x[:, [2, 1, 0]] * 255.0 - torch.tensor(_BGR_MEAN, device=x.device).view(1, 3, 1, 1)
             loc, conf, ldm = self._det(bgr)
-        loc, conf, ldm = loc[0].double().cpu().numpy(), conf[0, :, 1].double().cpu().numpy(), ldm[0].double().cpu().numpy()
+        # float64 on the CPU: MPS has no float64.
+        loc, conf, ldm = (t.cpu().double().numpy() for t in (loc[0], conf[0, :, 1], ldm[0]))
         pri = _priors(dh, dw)
         keep = conf > float(cfg.get("detect_threshold", 0.9))
         loc, conf, ldm, pri = loc[keep], conf[keep], ldm[keep], pri[keep]
@@ -524,14 +525,14 @@ class FaceModel(Model):
         for each output pixel. Zero outside `img`."""
         torch = _torch()
         h, w = img.shape[-2:]
-        dev = img.device
-        ys = torch.arange(out_h, dtype=torch.float64, device=dev) + oy
-        xs = torch.arange(out_w, dtype=torch.float64, device=dev) + ox
+        # The grid is built in float64 on the CPU (MPS has no float64), then moved.
+        ys = torch.arange(out_h, dtype=torch.float64) + oy
+        xs = torch.arange(out_w, dtype=torch.float64) + ox
         gy, gx = torch.meshgrid(ys, xs, indexing="ij")
-        a = torch.tensor(a_inv, dtype=torch.float64, device=dev)
+        a = torch.tensor(a_inv, dtype=torch.float64)
         sx = a[0, 0] * gx + a[0, 1] * gy + b_inv[0]
         sy = a[1, 0] * gx + a[1, 1] * gy + b_inv[1]
-        grid = torch.stack([2 * sx / max(w - 1, 1) - 1, 2 * sy / max(h - 1, 1) - 1], -1)[None].float()
+        grid = torch.stack([2 * sx / max(w - 1, 1) - 1, 2 * sy / max(h - 1, 1) - 1], -1)[None].float().to(img.device)
         return torch.nn.functional.grid_sample(img, grid, mode="bilinear", padding_mode="zeros", align_corners=True)
 
     def _paste_face(self, window: np.ndarray, origin: tuple[int, int], face: Face):

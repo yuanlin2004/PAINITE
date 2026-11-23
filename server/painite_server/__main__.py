@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,7 +15,8 @@ from .store import Store
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="painite-server")
-    parser.add_argument("--data-dir", help="data directory (default $PAINITE_DATA_DIR or /var/lib/painite)")
+    parser.add_argument("--data-dir", help="data directory (default $PAINITE_DATA_DIR, else /var/lib/painite on "
+                                           "Linux or ~/Library/Application Support/painite-server on a Mac)")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     serve = sub.add_parser("serve", help="run the HTTP server")
@@ -23,6 +25,8 @@ def _parser() -> argparse.ArgumentParser:
     serve.add_argument("--tls-cert", help="PEM certificate (default: <data-dir>/tls/server.crt if present)")
     serve.add_argument("--tls-key", help="PEM private key (default: <data-dir>/tls/server.key if present)")
     serve.add_argument("--insecure-http", action="store_true", help="serve plain HTTP even if certificates exist")
+    serve.add_argument("--device", choices=("auto", "cuda", "mps", "cpu"),
+                       help="where models run (default $PAINITE_DEVICE or auto: CUDA, then Apple MPS, then CPU)")
     serve.add_argument("--log-level", default="info")
 
     admin = sub.add_parser("admin", help="server setup")
@@ -57,7 +61,12 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # On Apple Silicon, an op MPS lacks runs on the CPU instead of failing.
+    # Must be set before torch is imported.
+    os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
     args = _parser().parse_args(argv)
+    if getattr(args, "device", None):
+        os.environ["PAINITE_DEVICE"] = args.device
     settings = Settings()
     if args.data_dir:
         settings.data_dir = Path(args.data_dir)

@@ -158,14 +158,9 @@ def job_steps(job: dict) -> list[dict]:
 
 
 def _gpu_status() -> dict:
-    try:
-        import torch  # noqa: PLC0415 - optional; present in the NGC image
+    from ..models import devices  # noqa: PLC0415
 
-        if torch.cuda.is_available():
-            return {"available": True, "name": torch.cuda.get_device_name(0)}
-    except Exception:  # noqa: BLE001
-        pass
-    return {"available": False, "name": None}
+    return devices.status()
 
 
 # Routes ----------------------------------------------------------------------
@@ -213,6 +208,7 @@ def capabilities(request: Request, owner: Owner) -> dict:
             "queue_capacity": s.queue_capacity,
             "result_retention_seconds": s.result_retention_s,
             "tile_size": s.tile_size,
+            "tile_band": s.tile_overlap // 2,
         },
         "formats": {"input": ["jpeg", "tiff"], "output": ["jpeg", "tiff"]},
     }
@@ -345,7 +341,7 @@ def create_job(
         if r is None:
             raise ApiError(400, "bad_request", "region is outside the image")
         stored = display_rect_to_stored(r, src["width"], src["height"], src["orientation"])
-        region = snap_to_tiles(stored, s.tile_size, src["width"], src["height"])
+        region = snap_to_tiles(stored, s.tile_size, src["width"], src["height"], s.tile_overlap // 2)
     elif body.region is not None:
         raise ApiError(400, "bad_request", "full jobs do not take a region")
 

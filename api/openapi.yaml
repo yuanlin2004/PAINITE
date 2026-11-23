@@ -335,6 +335,12 @@ components:
             queue_capacity: { type: integer }
             result_retention_seconds: { type: integer }
             tile_size: { type: integer }
+            tile_band:
+              type: integer
+              description: |
+                Blend band in px. Preview regions snap to the tile grid inset by
+                this much (see Region); a client that wants a preview of whole
+                tiles asks for x = k*tile_size + tile_band. Absent on older servers (0).
         formats:
           type: object
           required: [input, output]
@@ -360,8 +366,11 @@ components:
       description: |
         Preview region in displayed (orientation-applied) source pixels. The
         server maps it to stored pixels and snaps it outward to the full
-        image's tile grid, so the preview equals the same region of a full
-        export. `Job.region` reports the snapped region actually rendered.
+        image's tile grid inset by `tile_band` (left/top edges on
+        k*tile_size + tile_band, right/bottom on k*tile_size - tile_band, or
+        the image edge), so the preview equals the same region of a full
+        export and needs only the tiles under it. `Job.region` reports the
+        snapped region actually rendered.
       required: [x, y, w, h]
       properties:
         x: { type: integer, minimum: 0 }
