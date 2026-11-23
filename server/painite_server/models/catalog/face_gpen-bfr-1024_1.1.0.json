@@ -1,10 +1,10 @@
 {
-  "id": "face/gpen-bfr-1024@1.0.0",
+  "id": "face/gpen-bfr-1024@1.1.0",
   "adapter": "face",
   "scale": 1,
-  "description": "GPEN-BFR-1024 face restoration with RetinaFace-R50 detection (bake-off pick, bench/FACE_BAKEOFF.md).",
+  "description": "GPEN-BFR-1024 face restoration with RetinaFace-R50 detection (bake-off pick, bench/FACE_BAKEOFF.md). Pastes back only face pixels, found by BiSeNet face parsing, so hands, arms, hair and background near a face are left alone.",
   "license": {
-    "name": "Apache-2.0 (ModelScope model card); no license file in yangxy/GPEN",
+    "name": "Apache-2.0 for GPEN-BFR-1024 (ModelScope model card; no license file in yangxy/GPEN); MIT for the facexlib RetinaFace and BiSeNet parsing weights",
     "url": "https://modelscope.cn/models/iic/cv_gpen_image-portrait-enhancement-hires"
   },
   "files": [
@@ -19,11 +19,18 @@
       "url": "https://github.com/xinntao/facexlib/releases/download/v0.1.0/detection_Resnet50_Final.pth",
       "sha256": "6d1de9c2944f2ccddca5f5e010ea5ae64a39845a86311af6fdf30841b0a5a16d",
       "bytes": 109497761
+    },
+    {
+      "name": "parsing_bisenet.pth",
+      "url": "https://github.com/xinntao/facexlib/releases/download/v0.2.0/parsing_bisenet.pth",
+      "sha256": "468e13ca13a9b43cc0881a9f99083a430e9c0a38abd935431d1c28ee94b26567",
+      "bytes": 53289463
     }
   ],
   "config": {
     "detector": "detection_Resnet50_Final.pth",
     "restorer": "GPEN-BFR-1024.pth",
+    "parser": "parsing_bisenet.pth",
     "restorer_args": {
       "arch": "gpen",
       "size": 1024,
@@ -40,6 +47,8 @@
     "max_face": 1024,
     "mask_inset": 0.05,
     "mask_feather": 0.12,
+    "parse_grow": 0.01,
+    "parse_feather": 0.015,
     "color_anchor_sigma": 16
   },
   "default": true
