@@ -20,6 +20,7 @@ NAV = [
     ("install.html", "Install"),
     ("mac.html", "Mac app"),
     ("cli.html", "Command line"),
+    ("agents.html", "AI agents"),
     ("enhancements.html", "Enhancements"),
     ("help.html", "Help"),
 ]

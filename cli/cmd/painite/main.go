@@ -21,6 +21,7 @@ import (
 	"github.com/yuanlin2004/PAINITE/cli/internal/api"
 	"github.com/yuanlin2004/PAINITE/cli/internal/config"
 	"github.com/yuanlin2004/PAINITE/cli/internal/enhance"
+	"github.com/yuanlin2004/PAINITE/cli/internal/mcp"
 	"github.com/yuanlin2004/PAINITE/cli/internal/plan"
 )
 
@@ -43,6 +44,7 @@ Usage:
   painite enhance --op denoise:0.6,sharpen:0.3,upscale2x -o <file|dir> [flags] <input>...   (pipeline)
   painite trust --fingerprint SHA256:<hex>
   painite status [--json]
+  painite mcp                     (MCP server on stdin/stdout, for AI agents)
   painite config set <key> <value>
   painite config get <key>
   painite config show
@@ -73,6 +75,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return cmdConfig(args[1:], stdout, stderr)
 	case "trust":
 		return cmdTrust(args[1:], stdout, stderr)
+	case "mcp":
+		return cmdMCP(args[1:], os.Stdin, stdout, stderr)
 	case "version", "--version":
 		fmt.Fprintf(stdout, "painite %s\nCopyright 2026 Yuan Lin\nUser guide: %s\n", version, guideURL)
 		return exitOK
@@ -355,6 +359,39 @@ func cmdStatus(args []string, stdout, stderr io.Writer) int {
 	return exitOK
 }
 
+// cmdMCP serves the Model Context Protocol on stdin and stdout, so AI agents
+// can use the server. Settings are read again for every tool call.
+func cmdMCP(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet("painite mcp", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	fs.Usage = func() {
+		fmt.Fprint(stderr, "usage: painite mcp [--endpoint URL] [--token TOKEN] [--ca-file PEM]\n\n"+
+			"Runs a Model Context Protocol server on stdin and stdout for AI agents such as Claude Code.\n"+
+			"Example: claude mcp add painite -- painite mcp\n\n")
+		fs.PrintDefaults()
+	}
+	var conn connFlags
+	conn.register(fs)
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return exitOK
+		}
+		return exitInvalid
+	}
+	if fs.NArg() > 0 {
+		fmt.Fprintf(stderr, "painite: mcp takes no arguments\n")
+		return exitInvalid
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	srv := mcp.NewServer(version, conn.client)
+	if err := srv.Serve(ctx, stdin, stdout, stderr); err != nil {
+		fmt.Fprintf(stderr, "painite mcp: %v\n", err)
+		return exitFailed
+	}
+	return exitOK
+}
+
 func cmdConfig(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
 		fmt.Fprint(stderr, "usage: painite config set <key> <value> | get <key> | show | path\n")
@@ -483,14 +520,11 @@ func cmdTrust(args []string, stdout, stderr io.Writer) int {
 	return exitOK
 }
 
-// maxSteps matches the server's limit on pipeline length.
-const maxSteps = 4
-
-// strengthOps take a strength; other known operations don't.
-var strengthOps = map[string]bool{"denoise": true, "sharpen": true, "unblur_motion": true, "unblur_focus": true,
-	"face": true}
-var knownOps = map[string]bool{"denoise": true, "sharpen": true, "unblur_motion": true, "unblur_focus": true,
-	"upscale2x": true, "face": true}
+// strengthOps take a strength; knownOps are all operations.
+var (
+	strengthOps = enhance.StrengthOps
+	knownOps    = enhance.KnownOps
+)
 
 const opList = "denoise, sharpen, unblur_motion, unblur_focus, upscale2x, or face"
 
@@ -501,7 +535,6 @@ func parseSteps(spec string, defaultStrength *float64) ([]enhance.Step, error) {
 		return nil, fmt.Errorf("--op is required (%s)", opList)
 	}
 	var steps []enhance.Step
-	upscales := 0
 	for _, part := range strings.Split(spec, ",") {
 		name, val, hasVal := strings.Cut(strings.TrimSpace(part), ":")
 		if name == "unblur" {
@@ -524,16 +557,10 @@ func parseSteps(spec string, defaultStrength *float64) ([]enhance.Step, error) {
 		} else if strengthOps[name] {
 			st.Strength = defaultStrength
 		}
-		if name == "upscale2x" {
-			upscales++
-		}
 		steps = append(steps, st)
 	}
-	if len(steps) > maxSteps {
-		return nil, fmt.Errorf("a pipeline has at most %d steps", maxSteps)
-	}
-	if upscales > 1 {
-		return nil, fmt.Errorf("a pipeline can upscale at most once")
+	if err := enhance.CheckSteps(steps); err != nil {
+		return nil, err
 	}
 	if defaultStrength != nil {
 		any := false

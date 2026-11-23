@@ -110,7 +110,16 @@ type JobRequest struct {
 	Params    map[string]any `json:"params,omitempty"`
 	Model     string         `json:"model,omitempty"`
 	Steps     []Step         `json:"steps,omitempty"`
+	Region    *Region        `json:"region,omitempty"`
 	Output    map[string]any `json:"output,omitempty"`
+}
+
+// Region is a preview area in displayed (orientation-applied) source pixels.
+type Region struct {
+	X int `json:"x"`
+	Y int `json:"y"`
+	W int `json:"w"`
+	H int `json:"h"`
 }
 
 // Step is one operation in a pipeline.
@@ -126,6 +135,7 @@ type Job struct {
 	Kind      string  `json:"kind"`
 	Operation string  `json:"operation"`
 	Model     string  `json:"model"`
+	Region    *Region `json:"region"`
 	Progress  float64 `json:"progress"`
 	Result    *struct {
 		Bytes   int64  `json:"bytes"`
@@ -342,6 +352,13 @@ func (c *Client) CreateJob(ctx context.Context, jr JobRequest, key string) (*Job
 		return err
 	})
 	return &job, err
+}
+
+// GetJobJSON returns the job exactly as the server reports it, including
+// fields the typed Job leaves out (steps, faces, timestamps).
+func (c *Client) GetJobJSON(ctx context.Context, id string) (map[string]any, error) {
+	var job map[string]any
+	return job, c.getJSON(ctx, "/jobs/"+id, &job)
 }
 
 func (c *Client) GetJob(ctx context.Context, id string) (*Job, error) {

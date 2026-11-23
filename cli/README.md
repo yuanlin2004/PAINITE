@@ -77,3 +77,24 @@ painite enhance --op unblur_focus -o fixed.jpg soft.jpg                      # m
   Progress goes to stderr.
 - Exit codes: `0` all succeeded, `1` any file failed (successful outputs are
   kept), `2` invalid invocation.
+
+## MCP server for AI agents
+
+`painite mcp` serves the [Model Context Protocol](https://modelcontextprotocol.io)
+on stdin and stdout, so agents such as Claude Code and Claude Desktop can use the
+server. It reads the same settings as the other commands (on every tool call, so
+changes apply without a restart) and accepts `--endpoint`, `--token`, `--ca-file`.
+
+```sh
+claude mcp add painite -- painite mcp
+```
+
+Tools: `server_status`, `enhance_photos` (same validation, dedup, retries and
+verified atomic writes as `painite enhance`; progress notifications while it
+runs), `preview_enhancement` (renders a region, center by default, and returns
+it as an image scaled to 1024 px so the agent can see it), and `submit_job`,
+`get_job` (optional `wait_seconds`), `download_result`, `cancel_job` for long
+batches. Tool errors use the CLI's stable error codes. The implementation is
+stdlib-only JSON-RPC in `internal/mcp`; it speaks MCP 2025-06-18, 2025-03-26 and
+2024-11-05 and supports cancellation. User guide:
+https://yuanlin2004.github.io/PAINITE/agents.html

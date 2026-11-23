@@ -1,0 +1,66 @@
+title: AI agents
+description: Let AI agents such as Claude Code and Claude Desktop enhance photos on your PAINITE server through MCP.
+---
+<div class="prose">
+<p class="eyebrow">AI agents</p>
+<h1>Use PAINITE from an AI agent</h1>
+<p class="lede">The <code>painite</code> command includes an MCP server, so an AI agent such as Claude Code or Claude Desktop can check your server, preview an enhancement, and enhance photos on your computer for you.</p>
+<p><a href="https://modelcontextprotocol.io">MCP</a> (Model Context Protocol) is the standard way agents use tools. <code>painite mcp</code> runs on the same computer as the agent and talks to it over standard input and output. Photos still go only to your own PAINITE server.</p>
+
+<h2>Set it up</h2>
+<ol class="steps">
+  <li><strong>Install and connect the command line tool.</strong> Follow <a href="install.html#cli">Install the command line tool</a>, then check that <code>painite status</code> works. The MCP server uses the same settings, so there is nothing else to configure. If you use the Mac app, it shares those settings too.</li>
+  <li><strong>Add it to your agent</strong>, as below.</li>
+</ol>
+
+<h3>Claude Code</h3>
+<pre><code>claude mcp add painite -- painite mcp</code></pre>
+<p>Add <code>--scope user</code> to use it in every project. Run <code>claude mcp list</code> to check that it connects.</p>
+
+<h3>Claude Desktop</h3>
+<p>Open <strong>Settings › Developer › Edit Config</strong> and add PAINITE to <code>claude_desktop_config.json</code>, then restart Claude Desktop:</p>
+<pre><code>{
+  "mcpServers": {
+    "painite": {
+      "command": "/usr/local/bin/painite",
+      "args": ["mcp"]
+    }
+  }
+}</code></pre>
+<p>Use the full path that <code>which painite</code> prints; Claude Desktop doesn't search your shell's <code>PATH</code>.</p>
+
+<h3>Other agents</h3>
+<p>Any MCP client that can start a local (stdio) server works: the command is <code>painite</code> with the argument <code>mcp</code>. To use a different server or token than your saved settings, set <code>PAINITE_ENDPOINT</code>, <code>PAINITE_TOKEN</code> and <code>PAINITE_CA_FILE</code> in the server's environment, or pass <code>--endpoint</code>, <code>--token</code> and <code>--ca-file</code> after <code>mcp</code>.</p>
+
+<h2>What you can ask</h2>
+<ul>
+  <li>“Is my PAINITE server up, and which enhancements does it have?”</li>
+  <li>“Show me what denoise at 0.6 does to the sky in ~/Pictures/night.jpg before you run it.”</li>
+  <li>“Denoise and then upscale every TIFF in ~/Scans/1970s into ~/Scans/enhanced.”</li>
+  <li>“Restore the faces in these old portraits and keep the originals.”</li>
+</ul>
+<p>The agent can look at previews, so it can compare strengths or operations and pick one before processing the full photo.</p>
+
+<h2>Tools</h2>
+<div class="table-wrap">
+<table>
+  <tbody>
+    <tr><td><code>server_status</code></td><td>Server health, GPU and queue, the enhancements with their strength ranges and default models, and limits.</td></tr>
+    <tr><td><code>enhance_photos</code></td><td>Enhances one or more photos with one operation or a pipeline of up to four steps, and saves the results. Same rules as <a href="cli.html"><code>painite enhance</code></a>: everything is checked first, and existing files are kept unless the agent asks to overwrite them.</td></tr>
+    <tr><td><code>preview_enhancement</code></td><td>Renders one region of a photo (the center by default) and shows the result to the agent as an image. The preview matches the same region of a full run exactly. It can also save the full-size preview as a JPEG. For <code>face</code>, it lists every face found in the whole photo.</td></tr>
+    <tr><td><code>submit_job</code></td><td>Uploads a photo and starts a job without waiting, for long batches.</td></tr>
+    <tr><td><code>get_job</code></td><td>A job's state, progress, timings and any faces found. It can wait up to two minutes for the job to finish.</td></tr>
+    <tr><td><code>download_result</code></td><td>Saves a finished job's result, checked against the server's checksum, then deletes the server's copy.</td></tr>
+    <tr><td><code>cancel_job</code></td><td>Cancels a queued or running job.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>Good to know</h2>
+<ul>
+  <li>Agents should give full file paths. A path starting with <code>~/</code> is understood; other relative paths are taken from the folder the agent started <code>painite mcp</code> in.</li>
+  <li>Your originals are never changed, and results are written safely, as with the command line.</li>
+  <li>A 24-megapixel photo takes about 30 seconds per step on a DGX Spark. <code>enhance_photos</code> reports progress while it works; for big batches the agent can use <code>submit_job</code> and <code>get_job</code> instead.</li>
+  <li>The agent can read and write any file you can. Claude Code and Claude Desktop ask before running a tool unless you allow it.</li>
+</ul>
+</div>
