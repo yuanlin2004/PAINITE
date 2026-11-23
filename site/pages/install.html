@@ -18,7 +18,7 @@ description: Install the PAINITE server on an NVIDIA DGX Spark, then the Mac app
 </div>
 
 <h2 id="server">1. Install the server</h2>
-<p><strong>You need:</strong> an NVIDIA DGX Spark (or another Linux machine with an NVIDIA GPU) with Docker and the NVIDIA Container Toolkit, which DGX OS includes. You also need about 40 GB of free disk space and an internet connection for the first install. PAINITE is tested on the DGX Spark.</p>
+<p><strong>You need:</strong> an NVIDIA DGX Spark (or another Linux machine with an NVIDIA GPU) with Docker and the NVIDIA Container Toolkit, which DGX OS includes. On other machines, the NVIDIA driver must be version 580 or newer (CUDA 13); check with <code>nvidia-smi</code>. You also need about 40 GB of free disk space and an internet connection for the first install. PAINITE is tested on the DGX Spark and on an x86-64 Ubuntu PC with a GeForce RTX 4070 (12 GB).</p>
 <ol class="steps">
   <li>
     <p>Download and unpack the server on the DGX Spark:</p>
