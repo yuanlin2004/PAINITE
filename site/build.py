@@ -25,6 +25,20 @@ NAV = [
 ]
 CURRENT = ' aria-current="page"'
 
+# Google Tag Manager container for the guide (analytics).
+GTM_ID = "GTM-MR9QX638"
+GTM_HEAD = f"""  <!-- Google Tag Manager -->
+  <script>(function(w,d,s,l,i){{w[l]=w[l]||[];w[l].push({{'gtm.start':
+  new Date().getTime(),event:'gtm.js'}});var f=d.getElementsByTagName(s)[0],
+  j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+  'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+  }})(window,document,'script','dataLayer','{GTM_ID}');</script>
+  <!-- End Google Tag Manager -->"""
+GTM_BODY = f"""<!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id={GTM_ID}"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->"""
+
 
 def page(fname: str, title: str, body: str, desc: str) -> str:
     nav = "\n".join(f'      <a href="{h}"{CURRENT if h == fname else ""}>{t}</a>' for h, t in NAV)
@@ -33,6 +47,7 @@ def page(fname: str, title: str, body: str, desc: str) -> str:
 <html lang="en">
 <head>
   <meta charset="utf-8">
+{GTM_HEAD}
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{t}</title>
   <meta name="description" content="{desc}">
@@ -40,6 +55,7 @@ def page(fname: str, title: str, body: str, desc: str) -> str:
   <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
+{GTM_BODY}
 <header class="site-header">
   <div class="inner">
     <a class="brand" href="index.html"><img src="assets/icon.svg" alt="">PAINITE</a>
