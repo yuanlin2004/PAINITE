@@ -35,6 +35,49 @@ type Step struct {
 	Strength  *float64
 }
 
+// MaxSteps matches the server's limit on pipeline length.
+const MaxSteps = 4
+
+// KnownOps are the server's operations; StrengthOps are those that take a strength.
+var (
+	KnownOps = map[string]bool{"denoise": true, "sharpen": true, "unblur_motion": true, "unblur_focus": true,
+		"upscale2x": true, "face": true}
+	StrengthOps = map[string]bool{"denoise": true, "sharpen": true, "unblur_motion": true, "unblur_focus": true,
+		"face": true}
+)
+
+// CheckSteps applies the server's pipeline rules: 1 to MaxSteps known
+// operations, at most one upscale, and strengths in 0..1 only where they apply.
+func CheckSteps(steps []Step) error {
+	if len(steps) == 0 {
+		return fmt.Errorf("at least one operation is required")
+	}
+	if len(steps) > MaxSteps {
+		return fmt.Errorf("a pipeline has at most %d steps", MaxSteps)
+	}
+	upscales := 0
+	for _, st := range steps {
+		if !KnownOps[st.Operation] {
+			return fmt.Errorf("unknown operation %q", st.Operation)
+		}
+		if st.Strength != nil {
+			if !StrengthOps[st.Operation] {
+				return fmt.Errorf("%s does not take a strength", st.Operation)
+			}
+			if *st.Strength < 0 || *st.Strength > 1 {
+				return fmt.Errorf("strength for %s must be between 0 and 1", st.Operation)
+			}
+		}
+		if st.Operation == "upscale2x" {
+			upscales++
+		}
+	}
+	if upscales > 1 {
+		return fmt.Errorf("a pipeline can upscale at most once")
+	}
+	return nil
+}
+
 // Result is one line of --json output.
 type Result struct {
 	Input     string             `json:"input"`
@@ -102,48 +145,12 @@ func (r *runner) one(ctx context.Context, i int, it plan.Item) (res Result) {
 	}
 
 	t0 := time.Now()
-	sha, size, err := hashFile(it.Input)
-	if err != nil {
-		return fail(&api.Error{Code: "input_unreadable", Message: err.Error()})
-	}
-	have, err := r.c.HasSource(ctx, sha)
+	job, err := Submit(ctx, r.c, it.Input, Request{Steps: r.o.Steps, Model: r.o.Model, Format: it.Format,
+		JPEGQuality: r.o.JPEGQuality, Kind: "full"}, func(msg string) { r.logf(i, it.Input, "%s", msg) })
 	if err != nil {
 		return fail(err)
-	}
-	if have {
-		r.logf(i, it.Input, "already on server, skipping upload")
-	} else {
-		r.logf(i, it.Input, "uploading %.1f MB", float64(size)/1e6)
-		if err := r.c.UploadSource(ctx, it.Input, sha, size); err != nil {
-			return fail(err)
-		}
 	}
 	res.ClientMS["upload"] = ms(time.Since(t0))
-
-	jr := api.JobRequest{
-		SourceID: "sha256:" + sha,
-		Kind:     "full",
-		Output:   map[string]any{"format": it.Format, "jpeg_quality": r.o.JPEGQuality},
-	}
-	if len(r.o.Steps) == 1 {
-		st := r.o.Steps[0]
-		jr.Operation, jr.Model = st.Operation, r.o.Model
-		if st.Strength != nil {
-			jr.Params = map[string]any{"strength": *st.Strength}
-		}
-	} else {
-		for _, st := range r.o.Steps {
-			step := api.Step{Operation: st.Operation}
-			if st.Strength != nil {
-				step.Params = map[string]any{"strength": *st.Strength}
-			}
-			jr.Steps = append(jr.Steps, step)
-		}
-	}
-	job, err := r.c.CreateJob(ctx, jr, newKey())
-	if err != nil {
-		return fail(err)
-	}
 	res.JobID = job.ID
 	res.Model = job.Model
 
@@ -167,7 +174,7 @@ func (r *runner) one(ctx context.Context, i int, it plan.Item) (res Result) {
 	}
 
 	t2 := time.Now()
-	if err := r.download(ctx, job, it.Output); err != nil {
+	if err := Download(ctx, r.c, job.ID, it.Output, r.o.Overwrite); err != nil {
 		return fail(err)
 	}
 	res.ClientMS["download"] = ms(time.Since(t2))
@@ -184,9 +191,8 @@ func (r *runner) one(ctx context.Context, i int, it plan.Item) (res Result) {
 }
 
 func (r *runner) wait(ctx context.Context, i int, it plan.Item, job *api.Job) (*api.Job, error) {
-	delay := 200 * time.Millisecond
 	lastState, lastPct := "", -1
-	for {
+	return Wait(ctx, r.c, job, func(job *api.Job) {
 		if job.State != lastState || (job.State == "running" && int(job.Progress*10) != lastPct) {
 			if job.State == "running" {
 				r.logf(i, it.Input, "running %d%%", int(job.Progress*100))
@@ -194,6 +200,17 @@ func (r *runner) wait(ctx context.Context, i int, it plan.Item, job *api.Job) (*
 				r.logf(i, it.Input, "%s", job.State)
 			}
 			lastState, lastPct = job.State, int(job.Progress*10)
+		}
+	})
+}
+
+// Wait polls a job until it finishes, calling update (if not nil) with each
+// state seen, the first one included. Polling backs off from 200 ms to 2 s.
+func Wait(ctx context.Context, c *api.Client, job *api.Job, update func(*api.Job)) (*api.Job, error) {
+	delay := 200 * time.Millisecond
+	for {
+		if update != nil {
+			update(job)
 		}
 		if job.Terminal() {
 			return job, nil
@@ -204,7 +221,7 @@ func (r *runner) wait(ctx context.Context, i int, it plan.Item, job *api.Job) (*
 			return nil, ctx.Err()
 		}
 		delay = min(delay*3/2, 2*time.Second)
-		next, err := r.c.GetJob(ctx, job.ID)
+		next, err := c.GetJob(ctx, job.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -212,9 +229,10 @@ func (r *runner) wait(ctx context.Context, i int, it plan.Item, job *api.Job) (*
 	}
 }
 
-// download writes to a temp file beside the destination, verifies it, and
+// Download writes a job's result to a temp file beside dest, verifies it, and
 // renames it into place, so a failure never leaves a partial or damaged file.
-func (r *runner) download(ctx context.Context, job *api.Job, dest string) error {
+// Without overwrite, an existing dest is left alone and reported.
+func Download(ctx context.Context, c *api.Client, jobID, dest string, overwrite bool) error {
 	dir := filepath.Dir(dest)
 	tmp, err := os.CreateTemp(dir, "."+filepath.Base(dest)+".painite-*.part")
 	if err != nil {
@@ -224,7 +242,7 @@ func (r *runner) download(ctx context.Context, job *api.Job, dest string) error 
 	defer os.Remove(tmpName)
 	defer tmp.Close()
 
-	want, err := r.c.DownloadResult(ctx, job.ID, tmp)
+	want, err := c.DownloadResult(ctx, jobID, tmp)
 	if err != nil {
 		return err
 	}
@@ -248,7 +266,7 @@ func (r *runner) download(ctx context.Context, job *api.Job, dest string) error 
 	if err := tmp.Close(); err != nil {
 		return &api.Error{Code: "write_failed", Message: err.Error()}
 	}
-	if r.o.Overwrite {
+	if overwrite {
 		if err := os.Rename(tmpName, dest); err != nil {
 			return &api.Error{Code: "write_failed", Message: err.Error()}
 		}
@@ -265,6 +283,66 @@ func (r *runner) download(ctx context.Context, job *api.Job, dest string) error 
 		}
 	}
 	return nil
+}
+
+// Request describes one job to submit for one input file.
+type Request struct {
+	Steps       []Step
+	Model       string // only with one step
+	Kind        string // full or preview
+	Format      string // output format: jpeg or tiff
+	JPEGQuality int
+	Region      *api.Region // preview only
+}
+
+// Submit uploads the input unless the server already has it, then creates
+// the job. log, if not nil, receives short progress messages.
+func Submit(ctx context.Context, c *api.Client, input string, rq Request, log func(string)) (*api.Job, error) {
+	if log == nil {
+		log = func(string) {}
+	}
+	sha, size, err := hashFile(input)
+	if err != nil {
+		return nil, &api.Error{Code: "input_unreadable", Message: err.Error()}
+	}
+	have, err := c.HasSource(ctx, sha)
+	if err != nil {
+		return nil, err
+	}
+	if have {
+		log("already on server, skipping upload")
+	} else {
+		log(fmt.Sprintf("uploading %.1f MB", float64(size)/1e6))
+		if err := c.UploadSource(ctx, input, sha, size); err != nil {
+			return nil, err
+		}
+	}
+	jr := api.JobRequest{SourceID: "sha256:" + sha, Kind: rq.Kind, Region: rq.Region}
+	if rq.Format != "" || rq.JPEGQuality != 0 {
+		jr.Output = map[string]any{}
+		if rq.Format != "" {
+			jr.Output["format"] = rq.Format
+		}
+		if rq.JPEGQuality != 0 {
+			jr.Output["jpeg_quality"] = rq.JPEGQuality
+		}
+	}
+	if len(rq.Steps) == 1 {
+		st := rq.Steps[0]
+		jr.Operation, jr.Model = st.Operation, rq.Model
+		if st.Strength != nil {
+			jr.Params = map[string]any{"strength": *st.Strength}
+		}
+	} else {
+		for _, st := range rq.Steps {
+			step := api.Step{Operation: st.Operation}
+			if st.Strength != nil {
+				step.Params = map[string]any{"strength": *st.Strength}
+			}
+			jr.Steps = append(jr.Steps, step)
+		}
+	}
+	return c.CreateJob(ctx, jr, newKey())
 }
 
 func hashFile(path string) (string, int64, error) {
