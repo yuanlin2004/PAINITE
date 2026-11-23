@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -12,9 +13,17 @@ def _env_int(name: str, default: int) -> int:
     return int(value) if value else default
 
 
+def default_data_dir() -> Path:
+    """/var/lib/painite on Linux; on a Mac, where the server runs as the user,
+    ~/Library/Application Support/painite-server."""
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "painite-server"
+    return Path("/var/lib/painite")
+
+
 @dataclass
 class Settings:
-    data_dir: Path = field(default_factory=lambda: Path(os.environ.get("PAINITE_DATA_DIR", "/var/lib/painite")))
+    data_dir: Path = field(default_factory=lambda: Path(os.environ.get("PAINITE_DATA_DIR") or default_data_dir()))
     max_upload_bytes: int = field(default_factory=lambda: _env_int("PAINITE_MAX_UPLOAD_BYTES", 512 * 1024 * 1024))
     max_input_pixels: int = field(default_factory=lambda: _env_int("PAINITE_MAX_INPUT_PIXELS", 48_000_000))
     max_output_pixels: int = field(default_factory=lambda: _env_int("PAINITE_MAX_OUTPUT_PIXELS", 192_000_000))

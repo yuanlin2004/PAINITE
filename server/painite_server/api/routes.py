@@ -158,14 +158,9 @@ def job_steps(job: dict) -> list[dict]:
 
 
 def _gpu_status() -> dict:
-    try:
-        import torch  # noqa: PLC0415 - optional; present in the NGC image
+    from ..models import devices  # noqa: PLC0415
 
-        if torch.cuda.is_available():
-            return {"available": True, "name": torch.cuda.get_device_name(0)}
-    except Exception:  # noqa: BLE001
-        pass
-    return {"available": False, "name": None}
+    return devices.status()
 
 
 # Routes ----------------------------------------------------------------------

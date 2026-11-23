@@ -30,7 +30,7 @@ from typing import Any
 
 import numpy as np
 
-from . import Model
+from . import Model, devices
 
 log = logging.getLogger("painite.models")
 
@@ -96,7 +96,7 @@ def validate_config(config: dict[str, Any], scale: int) -> None:
 class SpandrelModel(Model):
     weights_path: Path = field(default=Path())
     config: dict[str, Any] = field(default_factory=dict)
-    device: str = "cuda"
+    device: str = "auto"  # see devices.py
     _net: Any = field(default=None, repr=False)
     _dtype: Any = field(default=None, repr=False)
 
@@ -110,9 +110,7 @@ class SpandrelModel(Model):
             torch = _torch()
             import spandrel  # noqa: PLC0415
 
-            if self.device == "cuda" and not torch.cuda.is_available():
-                log.warning("CUDA is not available; running %s on the CPU (slow)", self.id)
-                self.device = "cpu"
+            self.device = devices.resolve(self.device)
             desc = spandrel.ModelLoader().load_from_file(str(self.weights_path))
             want = int(self.config.get("model_scale", self.scale))
             if desc.scale != want:

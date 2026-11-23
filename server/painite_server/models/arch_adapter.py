@@ -36,6 +36,7 @@ from typing import Any
 
 import numpy as np
 
+from . import devices
 from .spandrel_adapter import SpandrelModel, _load_lock, _torch, configure_determinism
 
 log = logging.getLogger("painite.models")
@@ -153,9 +154,7 @@ class ArchModel(SpandrelModel):
             if self._net is not None:
                 return
             torch = _torch()
-            if self.device == "cuda" and not torch.cuda.is_available():
-                log.warning("CUDA is not available; running %s on the CPU (slow)", self.id)
-                self.device = "cpu"
+            self.device = devices.resolve(self.device)
             spec = ARCHES[self.arch]
             net = build(self.arch, self.config, self.weights_path.parent)
             net.load_state_dict(_state_dict(self.weights_path), strict=True)
