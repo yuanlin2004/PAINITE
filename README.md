@@ -5,7 +5,7 @@
 
 # PAINITE
 
-PAINITE is an AI photo enhancement project with a macOS app and a standalone CLI for macOS and Linux. Both send photos to a separate inference server for processing. NVIDIA DGX Spark is the initial server target.
+PAINITE is an AI photo enhancement project with a macOS app and a standalone CLI for macOS and Linux. Both send photos to a separate inference server for processing. NVIDIA DGX Spark is the initial server target. The server is also tested on an x86-64 Ubuntu PC with a GeForce RTX 4070 (12 GB), which needs NVIDIA driver 580 or newer.
 
 **[User guide](https://yuanlin2004.github.io/PAINITE/)** · **[Download](https://github.com/yuanlin2004/PAINITE/releases/latest)** · [Release notes](docs/release-notes/v1.0.0.md)
 
