@@ -5,10 +5,11 @@ the M0 bake-off as adapters with the same interface and a manifest under
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -133,10 +134,16 @@ def _face(m: "Manifest", d: Path) -> Model:
     return make(m, d)
 
 
+def _version_key(version: str) -> tuple:
+    """Order versions like 1.10.0 > 1.9.2 (numeric parts first, then the rest)."""
+    return tuple((0, int(p), "") if p.isdigit() else (1, 0, p) for p in re.split(r"[.+-]", version))
+
+
 def default_registry(data_dir: Path | None = None) -> Registry:
     """Placeholders, then installed models. An installed model becomes its
-    operation's default if its manifest says so, or if it is the first
-    installed one for that operation."""
+    operation's default if its manifest says so (the highest version wins when
+    several do, so pulling a new version of a default model takes over from the
+    old one), or if it is the first installed one for that operation."""
     reg = Registry()
     reg.add(IdentityModel(id="denoise/identity@0.1.0", operation="denoise", version="0.1.0", placeholder=True))
     reg.add(IdentityModel(id="sharpen/identity@0.1.0", operation="sharpen", version="0.1.0", placeholder=True))
@@ -149,8 +156,14 @@ def default_registry(data_dir: Path | None = None) -> Registry:
         return reg
     from .manifest import installed  # noqa: PLC0415 - avoid import cycle
 
-    chosen: dict[str, bool] = {}  # operation -> chosen by an explicit default flag
-    for manifest, path in installed(data_dir):
+    models = installed(data_dir)
+    flagged: dict[str, Any] = {}  # operation -> the highest-version manifest marked default
+    for manifest, _ in models:
+        best = flagged.get(manifest.operation)
+        if manifest.default and (best is None or _version_key(manifest.version) > _version_key(best.version)):
+            flagged[manifest.operation] = manifest
+    chosen: set[str] = set()  # operations with a default installed model
+    for manifest, path in models:
         adapter = ADAPTERS.get(manifest.adapter)
         if adapter is None:
             log.warning("model %s needs adapter %r, which this server does not have", manifest.id, manifest.adapter)
@@ -161,9 +174,8 @@ def default_registry(data_dir: Path | None = None) -> Registry:
             log.exception("could not load model %s", manifest.id)
             continue
         op = manifest.operation
-        make_default = (manifest.default and not chosen.get(op)) or op not in chosen
+        make_default = (manifest is flagged.get(op)) or op not in chosen
         reg.add(model, default=make_default)
-        if make_default:
-            chosen[op] = chosen.get(op, False) or manifest.default
+        chosen.add(op)
         log.info("loaded model %s%s", manifest.id, " (default)" if make_default else "")
     return reg
