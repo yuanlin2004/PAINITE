@@ -15,6 +15,7 @@ PAINITE is an AI photo enhancement project with a macOS app and a standalone CLI
 | --- | --- |
 | Standalone Mac app | On macOS 27 or later (Apple silicon), open a photo, preview the enhancement against the original, and export the result. |
 | Standalone CLI | Enhance a single photo or batch on macOS 27 or later (Apple silicon) or Ubuntu 24.04 or later (x86-64 and ARM64). |
+| AI agents (MCP) | Claude Code, Claude Desktop or another MCP client runs `painite mcp` to check the server, preview enhancements and enhance photos ([guide](https://yuanlin2004.github.io/PAINITE/agents.html)). |
 | Adobe Lightroom desktop | On a supported Mac, open a photo in PAINITE through **Edit in**, save the enhancement, then select **Finish** in Lightroom to bring it back. |
 
 Version 1.0 has six enhancements: denoise, sharpen, unblur (motion and focus), face restoration and 2× upscale. Up to four of them can run in one pass.
@@ -25,7 +26,7 @@ Version 1.0 has six enhancements: denoise, sharpen, unblur (motion and focus), f
 | --- | --- |
 | [`api/openapi.yaml`](api/openapi.yaml) | Service contract shared by the server and clients |
 | [`server/`](server/README.md) | Inference server (Python, FastAPI, PyTorch) and its installer |
-| [`cli/`](cli/README.md) | `painite` command line (Go) for macOS and Linux |
+| [`cli/`](cli/README.md) | `painite` command line (Go) for macOS and Linux, including the `painite mcp` server for AI agents |
 | [`mac/`](mac/README.md) | Mac app (Swift) |
 | [`site/`](site/build.py) | User guide, published to GitHub Pages |
 | [`bench/`](bench/) | Model bake-offs that chose each model |
