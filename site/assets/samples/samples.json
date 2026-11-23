@@ -1,13 +1,13 @@
 {
   "denoise": {
     "title": "Denoise",
-    "meta": "Real ISO 12800 photo · denoise, strength 1.0",
-    "caption": "Grain from a very high ISO setting is removed while the strawberry seeds and leaf edges stay. Photo: Alexis Jazz, CC0."
+    "meta": "High-ISO noise · denoise, strength 1.0",
+    "caption": "Grain and color speckle are removed while the lettering, roof tiles and chain links stay sharp. The noise here was simulated (like ISO 6400). Photo: DimiTalen, CC0."
   },
   "sharpen": {
     "title": "Sharpen",
     "meta": "Softened photo · sharpen, strength 0.8",
-    "caption": "Restores crisp edges to a soft photo without halos. The softness here was simulated with a slight blur. Photo: Jebulon, CC0."
+    "caption": "Restores crisp brick edges, mortar lines and window bars without halos. The softness here was simulated with a slight blur. Photo: Jebulon, CC0."
   },
   "unblur_motion": {
     "title": "Unblur: Motion",
@@ -31,7 +31,7 @@
   },
   "pipeline": {
     "title": "Several steps at once",
-    "meta": "Noisy, soft, small · denoise 0.6 → sharpen 0.3 → upscale 2×",
-    "caption": "Up to four steps run in order in one pass on the server. Before is a bicubic enlargement. Noise, blur and size were simulated. Photo: Wilfredor, CC0."
+    "meta": "Noisy, soft, small · denoise 0.8 → sharpen 0.5 → upscale 2×",
+    "caption": "Up to four steps run in order in one pass on the server. Before is a bicubic enlargement. Noise, blur and size were simulated. Photo: Jebulon, CC0."
   }
 }
