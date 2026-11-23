@@ -1,15 +1,15 @@
 title: Install
-description: Install the PAINITE server on an NVIDIA DGX Spark, then the Mac app or the painite command line tool.
+description: Install the PAINITE server on an NVIDIA DGX Spark, a Linux PC with an NVIDIA GPU or a Mac with Apple silicon, then the Mac app or the painite command line tool.
 ---
 <div class="prose">
 <p class="eyebrow">Installation</p>
 <h1>Set up PAINITE</h1>
-<p class="lede">PAINITE has two parts: a <strong>server</strong> that runs the AI models on an NVIDIA GPU, and the <strong>apps</strong> you use on your computers. Set up the server once, then connect each Mac or Linux computer to it.</p>
+<p class="lede">PAINITE has two parts: a <strong>server</strong> that runs the AI models on a GPU (an NVIDIA GPU, or the GPU of a Mac with Apple silicon), and the <strong>apps</strong> you use on your computers. Set up the server once, then connect each Mac or Linux computer to it.</p>
 
 <div class="toc">
   <strong>On this page</strong>
   <ul>
-    <li><a href="#server">1. Install the server</a></li>
+    <li><a href="#server">1. Install the server</a> (<a href="#mac-server">or on a Mac</a>)</li>
     <li><a href="#token">2. Create a token for each computer</a></li>
     <li><a href="#mac">3. Install the Mac app</a></li>
     <li><a href="#cli">4. Install the command line tool</a></li>
@@ -18,6 +18,7 @@ description: Install the PAINITE server on an NVIDIA DGX Spark, then the Mac app
 </div>
 
 <h2 id="server">1. Install the server</h2>
+<p>These steps are for a DGX Spark or a Linux PC with an NVIDIA GPU. To run the server on a Mac, see <a href="#mac-server">Server on a Mac</a> below.</p>
 <p><strong>You need:</strong> an NVIDIA DGX Spark (or another Linux machine with an NVIDIA GPU) with Docker and the NVIDIA Container Toolkit, which DGX OS includes. On other machines, the NVIDIA driver must be version 580 or newer (CUDA 13); check with <code>nvidia-smi</code>. You also need about 40 GB of free disk space and an internet connection for the first install. PAINITE is tested on the DGX Spark and on an x86-64 Ubuntu PC with a GeForce RTX 4070 (12 GB).</p>
 <ol class="steps">
   <li>
@@ -39,6 +40,27 @@ cd painite-server_{{version}}</code></pre>
 </ol>
 <div class="note">
   <p>By default the certificate covers the machine's name, <code><em>name</em>.local</code>, and its IP addresses. If your computers reach it by another name, add it: <code>sudo ./install.sh --hostname spark.example.lan</code>. Run <code>./install.sh --help</code> for all options.</p>
+</div>
+
+<h3 id="mac-server">Server on a Mac (Apple silicon)</h3>
+<p>The server can also run on a Mac with Apple silicon, using the Mac's GPU. It's slower than a DGX Spark, but it's an easy way to try PAINITE, and the Mac app can use a server on the same Mac. <strong>You need:</strong> macOS 14 or later, 16 GB of memory or more, about 10 GB of free disk space, and <a href="https://docs.astral.sh/uv/">uv</a> (<code>brew install uv</code>) or Python 3.11 or newer. Docker isn't needed.</p>
+<ol class="steps">
+  <li>
+    <p>Download and unpack the server in Terminal:</p>
+<pre><code>curl -LO https://github.com/yuanlin2004/PAINITE/releases/download/v{{version}}/painite-server_{{version}}.tar.gz
+tar xzf painite-server_{{version}}.tar.gz
+cd painite-server_{{version}}</code></pre>
+  </li>
+  <li>
+    <p>Run the Mac installer as yourself, <strong>not</strong> with sudo:</p>
+<pre><code>./install-mac.sh</code></pre>
+    <p>It installs the server with PyTorch (about 1 GB) in <code>~/Library/Application Support/painite-server</code>, creates the private certificate, asks you to accept the model licenses and downloads the models, then starts the server. It starts again each time you log in. It also installs the <code>painite-server</code> command in <code>~/.local/bin</code>; use it without sudo.</p>
+  </li>
+  <li><p>When it finishes, it prints the address, <code>https://localhost:8443</code>, and the CA fingerprint. Continue with <a href="#token">step 2</a>, leaving out <code>sudo</code>.</p></li>
+</ol>
+<div class="note">
+  <p>By default only this Mac can use the server. To let other computers use it too, run <code>./install-mac.sh --lan</code>; they then connect to <code>https://<em>name</em>.local:8443</code>. <code>./install-mac.sh --uninstall</code> stops and removes the server but keeps the models, tokens and certificate. The log is in <code>~/Library/Logs/painite-server.log</code>.</p>
+  <p>On an M2 Pro with 16 GB, previews take 3 to 5 seconds and a 24-megapixel photo takes 1 to 2 minutes, depending on the enhancement (about 30 seconds on a DGX Spark). The server uses up to about 9 GB of memory while it works.</p>
 </div>
 
 <h2 id="token">2. Create a token for each computer</h2>
@@ -77,7 +99,7 @@ painite status</code></pre>
 <p>Next: <a href="cli.html">using the command line</a>.</p>
 
 <h2 id="upgrade">Upgrading</h2>
-<p><strong>Server:</strong> unpack the new release and run <code>sudo ./install.sh</code> again. Your certificate, tokens and models are kept. <strong>Mac app:</strong> replace the app in Applications. <strong>Command line:</strong> install the new package the same way.</p>
+<p><strong>Server:</strong> unpack the new release and run <code>sudo ./install.sh</code> again (<code>./install-mac.sh</code> on a Mac). Your certificate, tokens and models are kept, and it offers to download any new models. <strong>Mac app:</strong> replace the app in Applications. <strong>Command line:</strong> install the new package the same way.</p>
 <h3>Checksums</h3>
 <p>Each download has a SHA-256 checksum on the <a href="https://github.com/yuanlin2004/PAINITE/releases/tag/v{{version}}">release page</a>. To check the command line packages: <code>sha256sum -c --ignore-missing SHA256SUMS</code>.</p>
 </div>

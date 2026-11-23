@@ -6,9 +6,10 @@ description: Troubleshooting PAINITE, limits, privacy, and the licenses of PAINI
 <h1>Help and licenses</h1>
 
 <h2 id="troubleshooting">Troubleshooting</h2>
+<p>The server commands below are for a DGX Spark or Linux server. On a <a href="install.html#mac-server">server on a Mac</a>, run <code>painite-server</code> without <code>sudo</code>, and instead of <code>sudo systemctl restart painite-server</code> run <code>launchctl kickstart -k gui/$(id -u)/com.painite.server</code>.</p>
 <h3>The app or <code>painite status</code> can't reach the server</h3>
 <ul>
-  <li>Check that the server is running: <code>systemctl status painite-server</code> on the server. Its log is in <code>journalctl -u painite-server</code>.</li>
+  <li>Check that the server is running: <code>systemctl status painite-server</code> on the server. Its log is in <code>journalctl -u painite-server</code>. For a server on a Mac, run <code>launchctl print gui/$(id -u)/com.painite.server</code>; its log is <code>~/Library/Logs/painite-server.log</code>.</li>
   <li>Use the same name or IP address that the certificate covers (the installer prints them). To add a name, run <code>sudo ./install.sh --hostname <em>name</em></code> again. Clients stay trusted.</li>
   <li>On a Mac, allow PAINITE in <strong>System Settings › Privacy &amp; Security › Local Network</strong>.</li>
   <li>The server uses port 8443. Make sure a firewall doesn't block it.</li>
@@ -49,7 +50,7 @@ description: Troubleshooting PAINITE, limits, privacy, and the licenses of PAINI
     <tr><td>Denoise</td><td><a href="https://github.com/cszn/SCUNet">SCUNet</a> (Zhang et al.)</td><td>Apache-2.0</td></tr>
     <tr><td>Sharpen</td><td><a href="https://github.com/xinntao/Real-ESRGAN">Real-ESRGAN</a> (Wang et al.)</td><td>BSD-3-Clause</td></tr>
     <tr><td>Upscale 2×</td><td><a href="https://huggingface.co/Phips/2xNomosUni_esrgan_multijpg">2xNomosUni ESRGAN multijpg</a> (Philip Hofmann)</td><td>CC-BY-4.0</td></tr>
-    <tr><td>Face</td><td><a href="https://github.com/yangxy/GPEN">GPEN-BFR-1024</a> (Yang et al.), <a href="https://github.com/xinntao/facexlib">RetinaFace</a> detection</td><td>Apache-2.0 (per the <a href="https://modelscope.cn/models/iic/cv_gpen_image-portrait-enhancement-hires">ModelScope card</a>); MIT</td></tr>
+    <tr><td>Face</td><td><a href="https://github.com/yangxy/GPEN">GPEN-BFR-1024</a> (Yang et al.), <a href="https://github.com/xinntao/facexlib">RetinaFace</a> detection and BiSeNet face parsing</td><td>Apache-2.0 (per the <a href="https://modelscope.cn/models/iic/cv_gpen_image-portrait-enhancement-hires">ModelScope card</a>); MIT</td></tr>
     <tr><td>Unblur: Motion</td><td><a href="https://github.com/pp00704831/Stripformer-ECCV-2022-">Stripformer</a> (Tsai et al.)</td><td><strong>Non-commercial use only</strong></td></tr>
     <tr><td>Unblur: Focus</td><td><a href="https://github.com/lingyanruan/LaKDNet">LaKDNet</a> (Ruan et al.)</td><td>AGPL-3.0</td></tr>
   </tbody>
