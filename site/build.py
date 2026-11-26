@@ -24,6 +24,7 @@ NAV = [
     ("cli.html", "Command line"),
     ("agents.html", "AI agents"),
     ("enhancements.html", "Enhancements"),
+    ("whatsnew.html", "What's new"),
     ("help.html", "Help"),
 ]
 CURRENT = ' aria-current="page"'
