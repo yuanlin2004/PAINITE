@@ -365,7 +365,7 @@ def write_record(path: Path, record: dict) -> None:
 
 
 def prune(model_dir: Path, keep: str) -> None:
-    """Remove engines and records for other keys (an older TensorRT, driver or weights)."""
+    """Remove engines and records for other keys of one backend (an older TensorRT, driver or weights)."""
     for p in model_dir.glob("*"):
         if p.is_file() and not p.name.startswith(keep):
             p.unlink(missing_ok=True)
@@ -513,7 +513,9 @@ class Accelerator:
         log.info("accel: %s %s ready (%s); switching at the next job", self.model_id, self.spec.label, why)
 
     def _paths(self) -> tuple[Path, Path]:
-        d = _model_dir(self.engines_dir, self.model_id)
+        # One directory per backend, so pruning one backend's old files keeps the
+        # other candidates' records (a rejected TensorRT engine must stay recorded).
+        d = _model_dir(self.engines_dir, self.model_id) / self.spec.label
         return d / f"{self.key}.pt2", d / f"{self.key}.json"
 
     def _build(self, model) -> None:

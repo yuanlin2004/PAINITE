@@ -345,6 +345,7 @@ def fake_compile(monkeypatch, calls, ok=True):
             self._fail("output check failed: PSNR 20 dB", record={})
             return False
         accel.write_record(self._paths()[1], {"status": "ok"})
+        accel.prune(self._paths()[1].parent, self.key)  # as the real build does
         self._stage(lambda x: "compiled", "compiled")
         return True
 
