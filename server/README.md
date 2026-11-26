@@ -56,6 +56,15 @@ pulls the models after asking about their licenses, installs
 `--lan` also serves other computers; `--uninstall` removes the service and venv
 and keeps the data.
 
+On a Mac the models run through Core ML rather than PyTorch where that is
+faster (`painite_server/models/coreml.py`): sharpen and upscale2x on the Neural
+Engine, denoise, both unblurs and the face restorer on the GPU. The installer
+converts each model once from its own weights (about 4 minutes for all of them;
+`painite-server models coreml` does it again by hand) and keeps the result next to
+the weights; a server that finds no conversion makes it at startup. Images smaller
+than one tile window (640 px) run on PyTorch. `PAINITE_COREML=off` in the launchd
+agent's environment keeps everything on PyTorch (MPS).
+
 On an M2 Pro (16 GB) a 24 MP job takes 1.2 to 2.1 minutes depending on the
 operation (spark1: about 0.5 minutes), previews take 20 to 33 s, and the server
 uses up to about 9 GB of memory.
