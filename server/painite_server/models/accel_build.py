@@ -1,7 +1,7 @@
 """Build and check one TensorRT engine, in its own process (models/accel.py).
 
     python -m painite_server.models.accel_build --model-dir <install dir> \
-        --shape 1,3,640,640 --precision fp16 --typing weak --out <engine.ep> --record <record.json>
+        --shape 1,3,640,640 --precision fp16 --typing weak --out <engine.pt2> --record <record.json>
 
 Loads the model with the server's own adapter, exports the bare network at the
 given shape, builds the engine with Torch-TensorRT, saves it, loads it back
@@ -117,7 +117,7 @@ def main(argv: list[str] | None = None) -> int:
         log.info("built %s in %.1f s (%.0f MB)", manifest.id, record["build_s"], record["engine_mb"])
 
         # Check the engine as the server will run it: loaded back from disk.
-        mod = torch_tensorrt.load(str(args.out)).module()
+        mod = torch.export.load(str(args.out)).module()
 
         def fn(t):
             y = mod(t.to(in_dtype))

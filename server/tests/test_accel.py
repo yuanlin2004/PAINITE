@@ -122,6 +122,11 @@ def test_verdict():
     assert not accel.verdict({**good, "max_abs": 23}, srv, 50)[0]
     assert not accel.verdict({**good, "psnr_min": 24.2}, srv, 50)[0]  # Stripformer TensorRT FP16
     assert not accel.verdict({**good, "finite": False}, srv, 50)[0]  # RetinaFace TensorRT FP16
+    # Where even the PyTorch FP16 path is far from FP32 (sharpen on noisy tiles),
+    # the candidate may be up to PSNR_MARGIN_DB behind it.
+    weak = {"psnr_min": 41.4, "max_abs": 20, "mean_abs": 0.4, "finite": True}
+    assert accel.verdict({**good, "psnr_min": 39.8, "max_abs": 23}, weak, 50)[0]
+    assert not accel.verdict({**good, "psnr_min": 35.3, "max_abs": 23}, weak, 50)[0]
 
 
 def test_check_catches_a_wrong_network():
@@ -304,10 +309,10 @@ def test_unavailable_tensorrt(tmp_path, monkeypatch):
 
 
 def test_prune_keeps_only_the_current_key(tmp_path):
-    for name in ("old.ep", "old.json", "new.ep", "new.json", "new.log"):
+    for name in ("old.pt2", "old.json", "new.pt2", "new.json", "new.log"):
         (tmp_path / name).write_text("x")
     accel.prune(tmp_path, "new")
-    assert sorted(p.name for p in tmp_path.iterdir()) == ["new.ep", "new.json", "new.log"]
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["new.json", "new.log", "new.pt2"]
 
 
 # Registry, tile cache, health -------------------------------------------------

@@ -42,6 +42,10 @@ cd painite-server_{{version}}</code></pre>
   <p>By default the certificate covers the machine's name, <code><em>name</em>.local</code>, and its IP addresses. If your computers reach it by another name, add it: <code>sudo ./install.sh --hostname spark.example.lan</code>. Run <code>./install.sh --help</code> for all options.</p>
 </div>
 
+<div class="note">
+  <p><strong>The first few minutes after the first start are slower.</strong> On an NVIDIA GPU, the server builds faster versions of most models for your GPU in the background, which takes about 5 minutes. It checks each one against the standard model before using it, and keeps using the standard models until then, or for good if a check fails. After that, photos process up to twice as fast. Builds are kept, so later starts take seconds; after an upgrade they are rebuilt once. To turn this off, add <code>Environment=PAINITE_ACCEL=off</code> to the service with <code>sudo systemctl edit painite-server</code>.</p>
+</div>
+
 <h3 id="mac-server">Server on a Mac (Apple silicon)</h3>
 <p>The server can also run on a Mac with Apple silicon, using the Mac's GPU. It's slower than a DGX Spark, but it's an easy way to try PAINITE, and the Mac app can use a server on the same Mac. <strong>You need:</strong> macOS 14 or later, 16 GB of memory or more, about 10 GB of free disk space, and <a href="https://docs.astral.sh/uv/">uv</a> (<code>brew install uv</code>) or Python 3.11 or newer. Docker isn't needed.</p>
 <ol class="steps">

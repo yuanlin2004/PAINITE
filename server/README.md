@@ -26,6 +26,16 @@ Models run on an NVIDIA GPU (CUDA) if there is one, else on an Apple Silicon GPU
 (MPS), else on the CPU, slowly. `PAINITE_DEVICE` (or `serve --device`) forces
 `cuda`, `mps` or `cpu`.
 
+On CUDA, most models switch to a TensorRT engine or `torch.compile` once it has
+been built and checked against PyTorch. Builds run in the background after
+start-up (about 5 minutes the first time, then loaded from
+`$PAINITE_DATA_DIR/engines` in seconds), and PyTorch serves until then.
+`GET /v1/health` shows each model's backend under `accel`. Settings:
+`PAINITE_ACCEL` (`auto`, `off`, `tensorrt` or `compile`),
+`PAINITE_ACCEL_BUILD_TIMEOUT_S` (900), `PAINITE_ACCEL_MIN_PSNR` (50). To retry a
+failed build, delete its `.json` record from the engines directory and restart.
+See `painite_server/models/accel.py`.
+
 ```sh
 cd server
 python3 -m venv .venv && . .venv/bin/activate

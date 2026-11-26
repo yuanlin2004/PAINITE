@@ -68,9 +68,13 @@ BACKENDS = ("tensorrt", "compile")
 PRECISIONS = ("fp16", "fp32")
 TYPINGS = ("weak", "strong")
 # Bump when the engine format or the build recipe changes: old engines are rebuilt.
-FORMAT = 1
+FORMAT = 2
 DEFAULT_TIMEOUT_S = 900
 DEFAULT_MIN_PSNR = 50.0
+# Content the model is sensitive to (noise for a sharpener) lowers even the
+# PyTorch FP16 path's PSNR against FP32 (sharpen: 41 dB on the golden tiles).
+# A candidate passes at min_psnr(), or within this many dB of that path.
+PSNR_MARGIN_DB = 6.0
 # The candidate's max abs diff vs FP32 (8-bit) may be at most this, or twice
 # the PyTorch server path's own max diff, whichever is larger.
 MAX_ABS_FLOOR = 16
@@ -261,17 +265,20 @@ def compare(outs: list, refs: list) -> dict:
         maxd = max(maxd, int(d.max()))
         meand.append(float(d.mean()))
     return {"psnr_min": round(min(psnrs), 2), "max_abs": maxd, "mean_abs": round(float(np.mean(meand)), 4),
-            "finite": finite}
+            "finite": finite, "psnr": [round(p, 2) for p in psnrs]}
 
 
 def verdict(candidate: dict, server: dict, threshold: float | None = None) -> tuple[bool, str]:
     """Is the candidate close enough to PyTorch FP32? `server` is today's
-    PyTorch path measured the same way, for the max-diff allowance."""
+    PyTorch path measured the same way: the candidate may fall short of the
+    PSNR threshold only where that path does too (by PSNR_MARGIN_DB at most),
+    and its max diff may be up to twice that path's."""
     threshold = min_psnr() if threshold is None else threshold
     if not candidate["finite"]:
         return False, "output has NaN or Inf"
-    if candidate["psnr_min"] < threshold:
-        return False, f"PSNR {candidate['psnr_min']} dB < {threshold} dB"
+    floor = round(min(threshold, server["psnr_min"] - PSNR_MARGIN_DB), 2)
+    if candidate["psnr_min"] < floor:
+        return False, f"PSNR {candidate['psnr_min']} dB < {floor} dB"
     limit = max(MAX_ABS_FLOOR, 2 * server["max_abs"])
     if candidate["max_abs"] > limit:
         return False, f"max abs diff {candidate['max_abs']} > {limit}"
@@ -448,7 +455,7 @@ class Accelerator:
 
     def _paths(self) -> tuple[Path, Path]:
         d = _model_dir(self.engines_dir, self.model_id)
-        return d / f"{self.key}.ep", d / f"{self.key}.json"
+        return d / f"{self.key}.pt2", d / f"{self.key}.json"
 
     def _build(self, model) -> None:
         torch = _torch()
@@ -558,7 +565,7 @@ class Accelerator:
         try:
             import torch_tensorrt  # noqa: PLC0415, F401 - registers the TensorRT runtime ops
 
-            mod = torch_tensorrt.load(str(engine)).module()
+            mod = torch.export.load(str(engine)).module()
             in_dtype = torch.float16 if rec.get("input_dtype") == "float16" else torch.float32
 
             def fn(x, _m=mod, _dt=in_dtype):
