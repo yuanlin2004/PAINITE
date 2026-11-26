@@ -24,7 +24,10 @@
     "weights": "stripformer_RealBlur_J.pth",
     "dtype": "fp16",
     "context": 64,
-    "pad_multiple": 8
+    "pad_multiple": 8,
+    "accel": {
+      "backend": "compile"
+    }
   },
   "default": true
 }

@@ -34,6 +34,21 @@ class Model:
     def run(self, tile: np.ndarray) -> np.ndarray:  # float32 HxWxC in [0, 1]
         raise NotImplementedError
 
+    @property
+    def backend(self) -> str:
+        """What runs the network now (pytorch, tensorrt-fp16, compile; models/accel.py).
+        Part of the tile cache key: outputs of different backends differ slightly."""
+        return "pytorch"
+
+    def begin_job(self) -> None:
+        """Called by the worker before each job that uses this model. An
+        accelerated backend that finished building switches in here, between
+        jobs, never during one."""
+
+    def accel_status(self) -> dict | None:
+        """The accelerated backend's state for /health, or None if the model has none."""
+        return None
+
     def describe(self) -> dict:
         return {
             "id": self.id,
@@ -41,6 +56,7 @@ class Model:
             "version": self.version,
             "scale": self.scale,
             "placeholder": self.placeholder,
+            "backend": self.backend,
         }
 
 
@@ -139,11 +155,14 @@ def _version_key(version: str) -> tuple:
     return tuple((0, int(p), "") if p.isdigit() else (1, 0, p) for p in re.split(r"[.+-]", version))
 
 
-def default_registry(data_dir: Path | None = None) -> Registry:
+def default_registry(data_dir: Path | None = None, tile: int = 512, overlap: int = 64) -> Registry:
     """Placeholders, then installed models. An installed model becomes its
     operation's default if its manifest says so (the highest version wins when
     several do, so pulling a new version of a default model takes over from the
-    old one), or if it is the first installed one for that operation."""
+    old one), or if it is the first installed one for that operation.
+
+    Models whose manifest asks for an accelerated backend get one, sized for
+    the `tile` + context window (models/accel.py)."""
     reg = Registry()
     reg.add(IdentityModel(id="denoise/identity@0.1.0", operation="denoise", version="0.1.0", placeholder=True))
     reg.add(IdentityModel(id="sharpen/identity@0.1.0", operation="sharpen", version="0.1.0", placeholder=True))
@@ -170,6 +189,10 @@ def default_registry(data_dir: Path | None = None) -> Registry:
             continue
         try:
             model = adapter(manifest, path)
+            if not model.placeholder:
+                from . import accel  # noqa: PLC0415
+
+                accel.attach(model, manifest, data_dir, tile, overlap)
         except Exception:  # noqa: BLE001 - one broken model must not stop the server
             log.exception("could not load model %s", manifest.id)
             continue

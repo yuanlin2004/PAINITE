@@ -24,7 +24,11 @@
         "type": "color_anchor",
         "sigma": 8
       }
-    ]
+    ],
+    "accel": {
+      "backend": "tensorrt",
+      "precision": "fp16"
+    }
   },
   "default": true
 }
