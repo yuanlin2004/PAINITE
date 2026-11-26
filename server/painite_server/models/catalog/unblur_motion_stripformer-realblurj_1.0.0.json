@@ -25,9 +25,15 @@
     "dtype": "fp16",
     "context": 64,
     "pad_multiple": 8,
-    "accel": {
-      "backend": "compile"
-    }
+    "accel": [
+      {
+        "backend": "tensorrt",
+        "precision": "fp16"
+      },
+      {
+        "backend": "compile"
+      }
+    ]
   },
   "default": true
 }

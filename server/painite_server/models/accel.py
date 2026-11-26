@@ -2,12 +2,19 @@
 TensorRT engines and torch.compile. PyTorch stays the reference and the
 fallback; Apple MPS and the CPU always run PyTorch.
 
-Which backend a model asks for is in its manifest's `config.accel`:
+Which backend a model asks for is in its manifest's `config.accel`, one spec
+or a list tried in order (PyTorch is always the last resort):
 
     "accel": {"backend": "tensorrt", "precision": "fp16"}   # TensorRT, FP16 (weakly typed)
     "accel": {"backend": "tensorrt", "precision": "fp16", "typing": "strong"}
     "accel": {"backend": "compile"}                          # torch.compile
+    "accel": [{"backend": "tensorrt"}, {"backend": "compile"}]  # TensorRT, else torch.compile
     "accel": {"backend": "pytorch"}                          # (or no key) plain PyTorch
+
+A candidate that fails its build or its output check is recorded, and the
+next one is tried; on the next start, recorded failures are skipped straight
+away. (Stripformer's TensorRT FP16 engine is wrong on a GB10 but fine on an
+RTX 4070, so unblur_motion lists TensorRT first and torch.compile second.)
 
 An installed manifest without the key takes it from the server's catalog entry
 for the same model id, so models installed before this feature need no re-pull.
@@ -31,7 +38,12 @@ Life of an accelerated model (the server serves PyTorch throughout):
    cache under the same directory).
 3. A build that passes is staged and switched to between jobs (`begin_job`),
    never during one. A build or check that fails is logged and recorded in the
-   cache, so it is not retried on every start; the model stays on PyTorch. A
+   cache, and the next candidate (finally PyTorch) is used. Failed output
+   checks and deterministic build errors are not retried on later starts.
+   Failures that may not repeat (out of GPU memory, allocation failures, the
+   time limit, the build process killed) are retried on later starts, up to
+   MAX_ATTEMPTS builds in all. PAINITE_ACCEL_RETRY=1 retries every recorded
+   failure once more; deleting `<data_dir>/engines/` starts from scratch. A
    torch.compile that raises disables torch.compile for the whole process (a
    failed compile can leave dynamo's state broken for later ones).
 4. Windows of any other shape (images smaller than a tile window) and any
@@ -51,6 +63,7 @@ import logging
 import math
 import os
 import queue
+import re
 import subprocess
 import sys
 import threading
@@ -78,6 +91,26 @@ PSNR_MARGIN_DB = 6.0
 # The candidate's max abs diff vs FP32 (8-bit) may be at most this, or twice
 # the PyTorch server path's own max diff, whichever is larger.
 MAX_ABS_FLOOR = 16
+# Builds that fail for a possibly transient reason are tried this many times
+# in all (over several starts) before the failure is treated as permanent.
+MAX_ATTEMPTS = 2
+_TRANSIENT = re.compile(r"out of memory|outofmemory|CUDA_ERROR_OUT_OF_MEMORY|cudaErrorMemoryAllocation|"
+                        r"bad_alloc|failed to allocate|allocation fail|cannot allocate|longer than|killed",
+                        re.IGNORECASE)
+
+
+def transient(reason: str, returncode: int | None = None) -> bool:
+    """Might this build failure not happen again (memory pressure from jobs
+    running alongside, the time limit, the OOM killer)? Output-check failures
+    and conversion errors repeat, so they are not transient."""
+    if returncode is not None and returncode in (-9, 137):  # SIGKILL: usually the kernel's OOM killer
+        return True
+    return bool(_TRANSIENT.search(reason or ""))
+
+
+def retry_all() -> bool:
+    """PAINITE_ACCEL_RETRY=1: retry every recorded build failure on this start."""
+    return (os.environ.get("PAINITE_ACCEL_RETRY") or "").strip().lower() in ("1", "true", "yes", "on")
 
 
 def requested() -> frozenset[str]:
@@ -131,6 +164,18 @@ class Spec:
         return self.backend
 
 
+def parse_specs(raw: Any) -> tuple[Spec, ...]:
+    """`config.accel` (one spec or a list, in order of preference) -> Specs.
+    Empty for plain PyTorch. Raises ValueError."""
+    items = raw if isinstance(raw, list) else [raw]
+    out = []
+    for item in items:
+        spec = parse_spec(item)
+        if spec is not None and spec not in out:
+            out.append(spec)
+    return tuple(out)
+
+
 def parse_spec(raw: Any) -> Spec | None:
     """`config.accel` -> Spec, or None for plain PyTorch. Raises ValueError."""
     if raw is None:
@@ -138,7 +183,7 @@ def parse_spec(raw: Any) -> Spec | None:
     if isinstance(raw, str):
         raw = {"backend": raw}
     if not isinstance(raw, dict):
-        raise ValueError("config.accel must be an object")
+        raise ValueError("config.accel must be an object or a list of objects")
     backend = raw.get("backend", "pytorch")
     if backend == "pytorch":
         return None
@@ -157,18 +202,18 @@ def parse_spec(raw: Any) -> Spec | None:
     return Spec("tensorrt", precision, typing)
 
 
-def spec_for(manifest, catalog: Callable[[], dict] | None = None) -> Spec | None:
-    """The installed manifest's accel spec, else the catalog entry's for the same id."""
+def specs_for(manifest, catalog: Callable[[], dict] | None = None) -> tuple[Spec, ...]:
+    """The installed manifest's accel specs, else the catalog entry's for the same id."""
     if "accel" in manifest.config:
-        return parse_spec(manifest.config["accel"])
+        return parse_specs(manifest.config["accel"])
     if catalog is None:
         from .manifest import catalog  # noqa: PLC0415 - avoid import cycle
     try:
         entry = catalog().get(manifest.id)
     except Exception:  # noqa: BLE001 - a broken catalog must not stop the model loading
         log.exception("could not read the model catalog")
-        return None
-    return parse_spec(entry.config.get("accel")) if entry is not None else None
+        return ()
+    return parse_specs(entry.config.get("accel")) if entry is not None else ()
 
 
 def cache_key(model_id: str, weights: list[str], config: dict, spec: Spec, shape: tuple, env: dict) -> str:
@@ -371,19 +416,23 @@ class Accelerator:
         model.accel_model_dir        install dir (for the TensorRT build subprocess)
     """
 
-    def __init__(self, model_id: str, spec: Spec, engines_dir: Path, weights: list[str], config: dict,
-                 shape: tuple[int, int, int, int]):
+    def __init__(self, model_id: str, specs: tuple[Spec, ...] | Spec, engines_dir: Path, weights: list[str],
+                 config: dict, shape: tuple[int, int, int, int]):
         self.model_id = model_id
-        self.spec = spec
+        self.specs = (specs,) if isinstance(specs, Spec) else tuple(specs)
+        self.spec = self.specs[0]  # the candidate being built, or the one that won
         self.engines_dir = engines_dir
         self.weights = weights
         self.config = {k: v for k, v in config.items() if k != "accel"}
         self.shape = tuple(shape)
         self.state = "idle"  # idle | queued | building | ready | active | failed | unavailable | off
         self.detail = ""
+        self.skipped: list[str] = []  # candidates that failed, with why
         self.key: str | None = None
+        self._prev_attempts = 0
         self._lock = threading.Lock()
         self._staged: Callable | None = None
+        self._staged_label = "pytorch"
         self._active: Callable | None = None
         self._active_label = "pytorch"
 
@@ -399,9 +448,9 @@ class Accelerator:
         with self._lock:
             if self._staged is not None:
                 self._active, self._staged = self._staged, None
-                self._active_label = self.spec.label
+                self._active_label = self._staged_label
                 self.state = "active"
-                log.info("accel: %s now runs on %s", self.model_id, self.spec.label)
+                log.info("accel: %s now runs on %s", self.model_id, self._active_label)
 
     def call(self, x, fallback: Callable):
         """The accelerated network for the engine's shape, PyTorch otherwise."""
@@ -411,7 +460,7 @@ class Accelerator:
         try:
             return fn(x)
         except Exception as e:  # noqa: BLE001 - fall back, and stop using this engine
-            log.exception("accel: %s failed at run time on %s; back to PyTorch", self.model_id, self.spec.label)
+            log.exception("accel: %s failed at run time on %s; back to PyTorch", self.model_id, self._active_label)
             with self._lock:
                 self._active = None
                 self._active_label = "pytorch"
@@ -419,9 +468,14 @@ class Accelerator:
             return fallback(x)
 
     def status(self) -> dict:
-        return {"backend": self.backend, "target": self.spec.label, "state": self.state, "detail": self.detail}
+        return {"backend": self.backend, "target": self.spec.label, "state": self.state, "detail": self.detail,
+                "candidates": [s.label for s in self.specs], "skipped": list(self.skipped)}
 
     # Building --------------------------------------------------------------
+
+    def _allowed(self) -> list[Spec]:
+        want = requested()
+        return [s for s in self.specs if s.backend in want]
 
     def start(self, model) -> None:
         """Queue the build once the model is loaded (no-op unless it can run)."""
@@ -431,25 +485,30 @@ class Accelerator:
             if model.device != "cuda":
                 self.state, self.detail = "off", f"{model.device} device (accelerated backends need CUDA)"
                 return
-            if self.spec.backend not in requested():
+            allowed = self._allowed()
+            if not allowed:
                 self.state, self.detail = "off", f"PAINITE_ACCEL={mode_label()}"
                 return
+            self.spec = allowed[0]
             self.state = "queued"
-        log.info("accel: %s queued for %s", self.model_id, self.spec.label)
+        log.info("accel: %s queued for %s", self.model_id, " then ".join(s.label for s in allowed))
         _enqueue(self, model)
 
-    def _fail(self, why: str, persist: bool = True, record: dict | None = None) -> None:
+    def _fail(self, why: str, persist: bool = True, record: dict | None = None, is_transient: bool = False) -> None:
         with self._lock:
             self.state, self.detail = "failed", why
             self._staged = None
-        log.warning("accel: %s stays on PyTorch: %s", self.model_id, why)
+        log.warning("accel: %s: %s failed: %s", self.model_id, self.spec.label, why)
         if persist and self.key:
+            attempts = self._prev_attempts + 1
             write_record(self._paths()[1], {**(record or {}), "status": "failed", "reason": why,
+                                            "transient": is_transient, "attempts": attempts,
                                             "model": self.model_id, "spec": asdict(self.spec), "at": time.time()})
 
     def _stage(self, fn: Callable, why: str) -> None:
         with self._lock:
             self._staged = fn
+            self._staged_label = self.spec.label
             self.state, self.detail = "ready", why
         log.info("accel: %s %s ready (%s); switching at the next job", self.model_id, self.spec.label, why)
 
@@ -458,34 +517,59 @@ class Accelerator:
         return d / f"{self.key}.pt2", d / f"{self.key}.json"
 
     def _build(self, model) -> None:
+        """Try each allowed candidate in order until one is staged."""
         torch = _torch()
+        self.skipped = []
+        for spec in self._allowed():
+            self.spec = spec
+            self.key = None
+            self._prev_attempts = 0
+            if self._try(torch, model):
+                return
+            self.skipped.append(f"{spec.label}: {self.detail}")
+        with self._lock:
+            if self.state != "unavailable" or len(self.skipped) > 1:
+                self.state = "failed"
+                self.detail = "; ".join(self.skipped) + "; staying on PyTorch"
+        log.warning("accel: %s stays on PyTorch (%s)", self.model_id, "; ".join(self.skipped))
+
+    def _try(self, torch, model) -> bool:
+        """Build (or load) and check self.spec. True if it was staged."""
         if self.spec.backend in _disabled:
             self._fail(f"{self.spec.backend} disabled in this process after an earlier failure", persist=False)
-            return
+            return False
         try:
             env = environment(torch, self.spec.backend)
         except ImportError as e:
             with self._lock:
                 self.state, self.detail = "unavailable", f"{self.spec.backend} is not installed ({e})"
             log.warning("accel: %s: %s", self.model_id, self.detail)
-            return
+            return False
         self.key = cache_key(self.model_id, self.weights, self.config, self.spec, self.shape, env)
         engine, rec_path = self._paths()
         rec = read_record(rec_path)
         if rec and rec.get("status") == "failed":
-            with self._lock:
-                self.state = "failed"
-                self.detail = f"{rec.get('reason')} (cached; delete {rec_path} to retry)"
-            log.warning("accel: %s stays on PyTorch: %s", self.model_id, self.detail)
-            return
+            self._prev_attempts = int(rec.get("attempts", 1))
+            if retry_all():
+                log.info("accel: %s: retrying %s (PAINITE_ACCEL_RETRY)", self.model_id, self.spec.label)
+            elif rec.get("transient") and self._prev_attempts < MAX_ATTEMPTS:
+                log.info("accel: %s: retrying %s after a possibly transient failure (attempt %d of %d): %s",
+                         self.model_id, self.spec.label, self._prev_attempts + 1, MAX_ATTEMPTS, rec.get("reason"))
+            else:
+                with self._lock:
+                    self.state = "failed"
+                    self.detail = f"{rec.get('reason')} (cached; PAINITE_ACCEL_RETRY=1 or delete {rec_path} " \
+                                  "to retry)"
+                log.warning("accel: %s: skipping %s: %s", self.model_id, self.spec.label, self.detail)
+                return False
+            rec = None
         with self._lock:
             self.state, self.detail = "building", ""
         if self.spec.backend == "compile":
-            self._build_compile(torch, model, env)
-        else:
-            self._build_tensorrt(torch, model, env, engine, rec_path, rec)
+            return self._build_compile(torch, model, env)
+        return self._build_tensorrt(torch, model, env, engine, rec_path, rec)
 
-    def _build_compile(self, torch, model, env: dict) -> None:
+    def _build_compile(self, torch, model, env: dict) -> bool:
         os.environ.setdefault("TORCHINDUCTOR_CACHE_DIR", str(self.engines_dir / "inductor"))
         net = model.accel_module()
         ref_net = copy.deepcopy(net).float()
@@ -508,12 +592,13 @@ class Accelerator:
         if th.is_alive():
             _disabled.add("compile")
             self._fail(f"torch.compile took longer than {build_timeout_s():.0f} s; torch.compile is off "
-                       "for this process")
-            return
+                       "for this process", is_transient=True)
+            return False
         if "error" in result:
             _disabled.add("compile")
-            self._fail(f"torch.compile failed: {result['error']!r}"[:500])
-            return
+            why = f"torch.compile failed: {result['error']!r}"[:500]
+            self._fail(why, is_transient=transient(why))
+            return False
         build_s = round(time.perf_counter() - t0, 1)
         fn = result["fn"]
         checked = check(torch, fn, ref_net, server, self.shape)
@@ -523,12 +608,13 @@ class Accelerator:
                   "build_s": build_s, "validation": checked, "at": time.time()}
         if not checked["passed"]:
             self._fail(f"output check failed: {checked['reason']}", record=record)
-            return
+            return False
         write_record(self._paths()[1], {**record, "status": "ok"})
         prune(self._paths()[1].parent, self.key)
         self._stage(fn, f"compiled in {build_s} s; {checked['reason']}")
+        return True
 
-    def _build_tensorrt(self, torch, model, env: dict, engine: Path, rec_path: Path, rec: dict | None) -> None:
+    def _build_tensorrt(self, torch, model, env: dict, engine: Path, rec_path: Path, rec: dict | None) -> bool:
         if not (rec and rec.get("status") == "ok" and engine.is_file()):
             engine.parent.mkdir(parents=True, exist_ok=True)
             cmd = [sys.executable, "-m", "painite_server.models.accel_build", "--model-dir",
@@ -544,18 +630,21 @@ class Accelerator:
                                           check=False)
                 except subprocess.TimeoutExpired:
                     engine.unlink(missing_ok=True)
-                    self._fail(f"engine build took longer than {build_timeout_s():.0f} s")
-                    return
-            rec = read_record(rec_path)
-            if rec is None or proc.returncode != 0:
+                    self._fail(f"engine build took longer than {build_timeout_s():.0f} s", is_transient=True)
+                    return False
+            new = read_record(rec_path)
+            if new is None or proc.returncode != 0 or new.get("status") != "ok":
                 engine.unlink(missing_ok=True)
-                self._fail(f"engine build failed (exit {proc.returncode}); see {engine.with_suffix('.log')}",
-                           record={"env": env})
-                return
-            if rec.get("status") != "ok":  # the subprocess already recorded why
-                engine.unlink(missing_ok=True)
-                self._fail(str(rec.get("reason")), persist=False)
-                return
+                if new is not None and proc.returncode == 0 and "validation" in new:
+                    # Built, but the output check failed: that repeats, so it is final.
+                    self._fail(str(new.get("reason")), record=new)
+                    return False
+                reason = str(new.get("reason")) if new and proc.returncode == 0 else \
+                    f"engine build failed (exit {proc.returncode}); see {engine.with_suffix('.log')}"
+                self._fail(reason, record={"env": env},
+                           is_transient=transient(f"{reason} {_tail(engine.with_suffix('.log'))}", proc.returncode))
+                return False
+            rec = new
             rec["env"] = env
             write_record(rec_path, rec)
             prune(engine.parent, self.key)
@@ -579,9 +668,21 @@ class Accelerator:
         except Exception as e:  # noqa: BLE001
             log.exception("accel: could not load %s", engine)
             self._fail(f"could not load the engine: {e!r}"[:500], persist=False)
-            return
+            return False
         v = rec.get("validation", {})
         self._stage(fn, f"{how}; {v.get('reason', 'checked')}")
+        return True
+
+
+def _tail(path: Path, n: int = 20000) -> str:
+    """The end of a build log, to look for out-of-memory errors."""
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            f.seek(max(0, f.tell() - n))
+            return f.read().decode("utf-8", "replace")
+    except OSError:
+        return ""
 
 
 def _torch():
@@ -593,14 +694,14 @@ def _torch():
 def attach(model, manifest, data_dir: Path, tile: int, overlap: int) -> None:
     """Give a CUDA-capable model its Accelerator, if its manifest asks for one."""
     try:
-        spec = spec_for(manifest)
+        specs = specs_for(manifest)
     except ValueError as e:
         log.warning("model %s: %s; running on PyTorch", manifest.id, e)
         return
-    if spec is None or not hasattr(model, "accel_module"):
+    if not specs or not hasattr(model, "accel_module"):
         return
     window = tile + 2 * max(overlap, model.receptive_padding)
     window += -window % int(getattr(model, "accel_multiple", 1))
-    model.accel = Accelerator(manifest.id, spec, data_dir / "engines", [f.sha256 for f in manifest.files],
+    model.accel = Accelerator(manifest.id, specs, data_dir / "engines", [f.sha256 for f in manifest.files],
                               dict(manifest.config), (1, 3, window, window))
     model.accel_model_dir = Path(model.weights_path).parent

@@ -59,26 +59,36 @@ def test_parse_spec():
             accel.parse_spec(bad)
 
 
+def test_parse_specs_preference_list():
+    assert accel.parse_specs(None) == ()
+    assert accel.parse_specs({"backend": "compile"}) == (accel.Spec("compile", "", ""),)
+    specs = accel.parse_specs([{"backend": "tensorrt"}, {"backend": "compile"}, {"backend": "pytorch"},
+                               {"backend": "tensorrt"}])
+    assert [s.label for s in specs] == ["tensorrt-fp16", "compile"]  # pytorch is implicit, duplicates dropped
+    with pytest.raises(ValueError):
+        accel.parse_specs([{"backend": "compile"}, {"backend": "tensorrt", "precision": "bf16"}])
+
+
 def test_catalog_defaults_follow_the_evaluation():
-    """TensorRT FP16 for the CNN/GAN ops, torch.compile for Stripformer (TensorRT
-    FP16 is silently wrong on it), plain PyTorch for the face model."""
+    """TensorRT FP16 for the CNN/GAN ops; Stripformer tries TensorRT FP16 (fine
+    on an RTX 4070, silently wrong on a GB10) and then torch.compile; plain
+    PyTorch for the face model."""
     want = {
-        "denoise": "tensorrt-fp16", "sharpen": "tensorrt-fp16", "upscale2x": "tensorrt-fp16",
-        "unblur_focus": "tensorrt-fp16", "unblur_motion": "compile", "face": None,
+        "denoise": ["tensorrt-fp16"], "sharpen": ["tensorrt-fp16"], "upscale2x": ["tensorrt-fp16"],
+        "unblur_focus": ["tensorrt-fp16"], "unblur_motion": ["tensorrt-fp16", "compile"], "face": [],
     }
     for m in mf.catalog().values():
-        spec = accel.parse_spec(m.config.get("accel"))
-        assert (spec.label if spec else None) == want[m.operation], m.id
+        assert [s.label for s in accel.parse_specs(m.config.get("accel"))] == want[m.operation], m.id
 
 
 def test_installed_manifest_wins_over_catalog():
     cat = mf.catalog()
     old = mf.Manifest.parse({**cat[SCUNET].to_json(), "config": {"weights": "w.pth"}})  # installed before accel
-    assert accel.spec_for(old, mf.catalog).label == "tensorrt-fp16"
+    assert [s.label for s in accel.specs_for(old, mf.catalog)] == ["tensorrt-fp16"]
     off = mf.Manifest.parse({**old.to_json(), "config": {"weights": "w.pth", "accel": {"backend": "pytorch"}}})
-    assert accel.spec_for(off, mf.catalog) is None
+    assert accel.specs_for(off, mf.catalog) == ()
     other = mf.Manifest.parse({**old.to_json(), "id": "denoise/custom@1.0.0"})
-    assert accel.spec_for(other, mf.catalog) is None
+    assert accel.specs_for(other, mf.catalog) == ()
 
 
 def test_cache_key_changes_with_everything_that_invalidates_an_engine():
@@ -148,8 +158,8 @@ class FakeModel:
 
 
 def make_acc(tmp_path, backend="tensorrt") -> accel.Accelerator:
-    spec = accel.parse_spec({"backend": backend})
-    return accel.Accelerator(SCUNET, spec, tmp_path / "engines", ["aa"], {"dtype": "fp16", "accel": {}},
+    specs = accel.parse_specs([{"backend": b} for b in backend.split(",")])
+    return accel.Accelerator(SCUNET, specs, tmp_path / "engines", ["aa"], {"dtype": "fp16", "accel": {}},
                              (1, 3, 8, 8))
 
 
@@ -315,6 +325,162 @@ def test_prune_keeps_only_the_current_key(tmp_path):
     assert sorted(p.name for p in tmp_path.iterdir()) == ["new.json", "new.log", "new.pt2"]
 
 
+# Preference list and transient failures ---------------------------------------
+
+def gate_fails_trt(monkeypatch, calls, reason="PSNR 31.74 dB < 50.0 dB"):
+    """The TensorRT build subprocess builds an engine that fails its output check."""
+    def run(cmd, **kw):
+        calls.append("tensorrt")
+        rec = Path(cmd[cmd.index("--record") + 1])
+        accel.write_record(rec, {"status": "failed", "reason": reason, "validation": {"passed": False}})
+        return subprocess.CompletedProcess(cmd, 0)
+
+    monkeypatch.setattr(accel.subprocess, "run", run)
+
+
+def fake_compile(monkeypatch, calls, ok=True):
+    def build_compile(self, torch, model, env):
+        calls.append("compile")
+        if not ok:
+            self._fail("output check failed: PSNR 20 dB", record={})
+            return False
+        accel.write_record(self._paths()[1], {"status": "ok"})
+        self._stage(lambda x: "compiled", "compiled")
+        return True
+
+    monkeypatch.setattr(accel.Accelerator, "_build_compile", build_compile)
+
+
+def test_rejected_tensorrt_falls_back_to_compile_and_is_skipped_next_start(tmp_path, monkeypatch):
+    fake_env(monkeypatch)
+    calls = []
+    gate_fails_trt(monkeypatch, calls)
+    fake_compile(monkeypatch, calls)
+    acc = make_acc(tmp_path, "tensorrt,compile")
+    acc._build(FakeModel())
+    assert calls == ["tensorrt", "compile"]
+    assert acc.state == "ready" and acc.spec.label == "compile" and "PSNR 31.74" in acc.skipped[0]
+    acc.begin_job()
+    assert acc.backend == "compile" and acc.call(Tensor((1, 3, 8, 8)), lambda x: "pytorch") == "compiled"
+    calls.clear()
+    nxt = make_acc(tmp_path, "tensorrt,compile")  # the next server start
+    nxt._build(FakeModel())
+    assert calls == ["compile"] and nxt.state == "ready" and "cached" in nxt.skipped[0]
+    assert nxt.status()["candidates"] == ["tensorrt-fp16", "compile"]
+
+
+def test_every_candidate_failing_leaves_pytorch(tmp_path, monkeypatch):
+    fake_env(monkeypatch)
+    calls = []
+    gate_fails_trt(monkeypatch, calls)
+    fake_compile(monkeypatch, calls, ok=False)
+    acc = make_acc(tmp_path, "tensorrt,compile")
+    acc._build(FakeModel())
+    assert calls == ["tensorrt", "compile"] and acc.state == "failed" and acc.backend == "pytorch"
+    assert "tensorrt-fp16: PSNR" in acc.detail and "compile: output check" in acc.detail
+
+
+def test_env_can_skip_a_candidate(tmp_path, monkeypatch):
+    fake_env(monkeypatch)
+    calls = []
+    gate_fails_trt(monkeypatch, calls)
+    fake_compile(monkeypatch, calls)
+    monkeypatch.setattr(accel, "_enqueue", lambda acc, model: acc._build(model))
+    monkeypatch.setenv("PAINITE_ACCEL", "compile")
+    acc = make_acc(tmp_path, "tensorrt,compile")
+    acc.start(FakeModel())
+    assert calls == ["compile"] and acc.spec.label == "compile"
+
+
+@pytest.mark.parametrize(("reason", "code", "want"), [
+    ("build error: OutOfMemoryError: CUDA out of memory. Tried to allocate 2.00 GiB", 0, True),
+    ("[TRT] [E] [defaultAllocator.cpp] Error: cudaErrorMemoryAllocation", 1, True),
+    ("std::bad_alloc", 1, True),
+    ("engine build took longer than 900 s", None, True),
+    ("engine build failed (exit -9)", -9, True),
+    ("PSNR 24.2 dB < 50.0 dB", 0, False),
+    ("build error: RuntimeError: Could not infer output types for DECONVOLUTION bf16", 0, False),
+    ("engine build failed (exit -11)", -11, False),
+])
+def test_transient_classification(reason, code, want):
+    assert accel.transient(reason, code) is want
+
+
+def oom_build(monkeypatch, calls):
+    def run(cmd, **kw):
+        calls.append(cmd)
+        rec = Path(cmd[cmd.index("--record") + 1])
+        accel.write_record(rec, {"status": "failed",
+                                 "reason": "build error: OutOfMemoryError: CUDA out of memory"})
+        return subprocess.CompletedProcess(cmd, 0)
+
+    monkeypatch.setattr(accel.subprocess, "run", run)
+
+
+def test_out_of_memory_is_retried_on_the_next_start_then_kept(tmp_path, monkeypatch):
+    fake_env(monkeypatch)
+    calls = []
+    oom_build(monkeypatch, calls)
+    acc = make_acc(tmp_path)
+    acc._build(FakeModel())
+    rec = json.loads(acc._paths()[1].read_text())
+    assert acc.state == "failed" and rec["transient"] and rec["attempts"] == 1
+    acc = make_acc(tmp_path)  # second start: one more try
+    acc._build(FakeModel())
+    rec = json.loads(acc._paths()[1].read_text())
+    assert len(calls) == 2 and rec["attempts"] == 2
+    acc = make_acc(tmp_path)  # third start: MAX_ATTEMPTS reached, skipped
+    acc._build(FakeModel())
+    assert len(calls) == 2 and "cached" in acc.detail
+
+
+def test_transient_failure_then_success(tmp_path, monkeypatch):
+    fake_env(monkeypatch)
+    calls = []
+    oom_build(monkeypatch, calls)
+    make_acc(tmp_path)._build(FakeModel())
+    gate_fails_trt(monkeypatch, calls)  # second try builds, then fails the check: final
+    acc = make_acc(tmp_path)
+    acc._build(FakeModel())
+    rec = json.loads(acc._paths()[1].read_text())
+    assert not rec["transient"] and "PSNR" in rec["reason"]
+    make_acc(tmp_path)._build(FakeModel())
+    assert len(calls) == 2
+
+
+def test_timeout_and_oom_killer_are_transient(tmp_path, monkeypatch):
+    fake_env(monkeypatch)
+    monkeypatch.setattr(accel.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, -9))
+    acc = make_acc(tmp_path)
+    acc._build(FakeModel())
+    assert json.loads(acc._paths()[1].read_text())["transient"]
+
+
+def test_out_of_memory_found_in_the_build_log(tmp_path, monkeypatch):
+    fake_env(monkeypatch)
+
+    def run(cmd, stdout, **kw):
+        stdout.write("...\n[TRT] [E] cudaErrorMemoryAllocation: out of memory\nSegmentation fault\n")
+        return subprocess.CompletedProcess(cmd, -11)
+
+    monkeypatch.setattr(accel.subprocess, "run", run)
+    acc = make_acc(tmp_path)
+    acc._build(FakeModel())
+    assert json.loads(acc._paths()[1].read_text())["transient"]
+
+
+def test_retry_env_retries_permanent_failures(tmp_path, monkeypatch):
+    fake_env(monkeypatch)
+    calls = []
+    gate_fails_trt(monkeypatch, calls)
+    make_acc(tmp_path)._build(FakeModel())
+    make_acc(tmp_path)._build(FakeModel())
+    assert len(calls) == 1
+    monkeypatch.setenv("PAINITE_ACCEL_RETRY", "1")
+    make_acc(tmp_path)._build(FakeModel())
+    assert len(calls) == 2
+
+
 # Registry, tile cache, health -------------------------------------------------
 
 def install(data_dir: Path, model_id: str, extra_config: dict | None = None) -> None:
@@ -333,7 +499,7 @@ def install(data_dir: Path, model_id: str, extra_config: dict | None = None) -> 
 @pytest.mark.parametrize(("model_id", "tile", "overlap", "window", "label"), [
     (SCUNET, 512, 64, 640, "tensorrt-fp16"),
     (SCUNET, 256, 32, 384, "tensorrt-fp16"),
-    ("unblur_motion/stripformer-realblurj@1.0.0", 512, 64, 640, "compile"),
+    ("unblur_motion/stripformer-realblurj@1.0.0", 512, 64, 640, "tensorrt-fp16"),
     ("unblur_focus/lakdnet-defocus-lfdpdd-s@1.0.0", 500, 64, 632, "tensorrt-fp16"),  # padded to 8
 ])
 def test_registry_attaches_accelerators(tmp_path, model_id, tile, overlap, window, label):
@@ -427,7 +593,7 @@ def test_health_reports_backends(tmp_path, monkeypatch):
         body = client.get("/v1/health").json()
     assert body["accel"]["mode"] == "tensorrt"
     assert body["accel"]["models"][SCUNET] == {"backend": "pytorch", "target": "tensorrt-fp16", "state": "idle",
-                                               "detail": ""}
+                                               "detail": "", "candidates": ["tensorrt-fp16"], "skipped": []}
 
 
 def test_worker_switches_backends_between_jobs(tmp_path):
