@@ -21,8 +21,9 @@ dependencies = [
 # Real models. torch and torchvision come from the NGC base image (or your own CUDA build).
 models = ["spandrel==0.4.2", "einops>=0.7"]
 # Native install on Apple Silicon (install-mac.sh): PyTorch with MPS from PyPI,
-# and libvips bundled in the pyvips wheel (no Homebrew).
-mac = ["torch>=2.6", "torchvision>=0.21", "pyvips[binary]>=2.2.3"]
+# libvips bundled in the pyvips wheel (no Homebrew), and coremltools, which
+# converts the models to Core ML (models/coreml.py).
+mac = ["torch>=2.6", "torchvision>=0.21", "pyvips[binary]>=2.2.3", "coremltools>=9.0,<10"]
 test = ["pytest>=8", "httpx>=0.27", "pillow>=10"]
 
 [project.scripts]

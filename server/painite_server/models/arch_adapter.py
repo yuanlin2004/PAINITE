@@ -36,7 +36,7 @@ from typing import Any
 
 import numpy as np
 
-from . import devices
+from . import coreml, devices
 from .spandrel_adapter import SpandrelModel, _load_lock, _torch, configure_determinism
 
 log = logging.getLogger("painite.models")
@@ -116,6 +116,7 @@ def validate_config(config: dict[str, Any], scale: int) -> None:
         raise ValueError("torch_arch models take no postprocess steps")
     if scale != 1:
         raise ValueError("torch_arch models are 1x")
+    coreml.validate_config(config.get("coreml"))
 
 
 def _state_dict(path: Path) -> dict[str, Any]:
@@ -168,8 +169,23 @@ class ArchModel(SpandrelModel):
             self._pad_multiple = int(self.config.get("pad_multiple", spec.pad_multiple))
             configure_determinism()
             self._net = net
-            log.info("loaded %s (%s, %s, %s)", self.id, self.arch, self.device, dtype)
+            self._setup_coreml(self.arch, self._build_cpu)
+            log.info("loaded %s (%s, %s, %s%s)", self.id, self.arch, self.device, dtype,
+                     f"; {self._coreml.describe()} at the standard tile size" if self._coreml else "")
         self._start_accel()
+
+    def _build_cpu(self):
+        """A fresh fp32 CPU copy of the network, for Core ML conversion."""
+        spec = ARCHES[self.arch]
+        net = build(self.arch, self.config, self.weights_path.parent)
+        net.load_state_dict(_state_dict(self.weights_path), strict=True)
+        if spec.wrap is not None:
+            net = spec.wrap(net)
+        return net.float().eval()
+
+    def coreml_window(self, tile: int, overlap: int) -> int:
+        w = super().coreml_window(tile, overlap)
+        return w + (-w % self.accel_multiple)  # Core ML sees the padded window
 
     @property
     def accel_multiple(self) -> int:
@@ -198,6 +214,7 @@ class ArchModel(SpandrelModel):
             y = self.accel.call(xp, self._forward) if self.accel is not None else self._forward(xp)
             y = y[..., :h, :w].clamp_(0, 1)
             return y[0].permute(1, 2, 0).cpu().numpy().astype(np.float32, copy=False)
+
 
 
 def make(manifest, path: Path) -> ArchModel:

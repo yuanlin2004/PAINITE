@@ -321,6 +321,7 @@ class FaceModel(Model):
     _dtype: Any = field(default=None, repr=False)
     _cache: OrderedDict = field(default_factory=OrderedDict, repr=False)
     _cache_lock: Any = field(default_factory=threading.Lock, repr=False)
+    _coreml: Any = field(default=None, repr=False)  # coreml.Runner for the restorer, on a Mac
 
     # Loading ---------------------------------------------------------------
 
@@ -380,8 +381,62 @@ class FaceModel(Model):
 
             configure_determinism()
             self._net = net
-            log.info("loaded %s (detector RetinaFace-R50, restorer %s, %s, %s, %s mask)", self.id, arch_name,
-                     self.device, dtype, "face-parsing" if self._parser is not None else "square")
+            self._setup_coreml()
+            log.info("loaded %s (detector RetinaFace-R50, restorer %s, %s, %s, %s mask%s)", self.id, arch_name,
+                     self.device, dtype, "face-parsing" if self._parser is not None else "square",
+                     f"; restorer on {self._coreml.describe()}" if self._coreml else "")
+
+    def _setup_coreml(self) -> None:
+        from . import coreml  # noqa: PLC0415
+
+        choice = coreml.choose(self._arch, self.config, self.device)
+        if choice is not None:
+            self._coreml = coreml.Runner(self.id, self._build_restorer_cpu, self.restorer_path.parent / "coreml",
+                                         *choice)
+            self._coreml.sizes.add(int(self.config.get("face_size", 512)))
+
+    def _build_restorer_cpu(self):
+        """The restorer as an fp32 CPU module mapping a [0, 1] crop to its
+        [0, 1] restoration (before clamping), for Core ML conversion. GPEN only."""
+        torch = _torch()
+        from .gpen_arch import FullGenerator  # noqa: PLC0415
+
+        args = self.config.get("restorer_args", {})
+        net = FullGenerator(int(args.get("size", 1024)), int(args.get("style_dim", 512)),
+                            int(args.get("n_mlp", 8)), int(args.get("channel_multiplier", 2)),
+                            narrow=float(args.get("narrow", 1)))
+        net.load_state_dict(torch.load(str(self.restorer_path), map_location="cpu", weights_only=True))
+
+        class Restorer(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.net = net
+
+            def forward(self, crop):
+                y = self.net(crop * 2 - 1)
+                y = y[0] if isinstance(y, (tuple, list)) else y
+                return (y + 1) / 2
+
+        return Restorer().float().eval()
+
+    def prepare_coreml(self) -> None:
+        """Startup hook (see SpandrelModel.prepare_coreml): the restorer runs at the face size."""
+        self.load()
+        if self._coreml is not None:
+            self._coreml.prepare(int(self.config.get("face_size", 512)))
+
+    @property
+    def backend(self) -> str:
+        """The restorer's engine (part of the tile cache key; models/coreml.py)."""
+        return self._coreml.backend if self._coreml is not None else "pytorch"
+
+    def accel_status(self) -> dict | None:
+        return self._coreml.status() if self._coreml is not None else None
+
+    def engine(self) -> str:
+        if self._coreml is not None and not self._coreml.failed:
+            return f"restorer on {self._coreml.describe()}"
+        return "PyTorch"
 
     # Detection -------------------------------------------------------------
 
@@ -484,6 +539,10 @@ class FaceModel(Model):
     def _restore(self, crop):
         """crop: 1x3xSxS float32 in [0, 1] on the device. Returns the same shape."""
         torch = _torch()
+        if self._coreml is not None and self._arch == "GPEN":
+            y = self._coreml.run(crop.float().cpu().numpy())
+            if y is not None:
+                return torch.from_numpy(y).to(crop.device).clamp(0, 1)
         args = dict(self.config.get("restorer_args", {}))
         x = (crop * 2 - 1).to(self._dtype)
         net = self._net
@@ -638,6 +697,9 @@ def validate_config(config: dict[str, Any]) -> None:
         raise ValueError("config.parser must name a file when set")
     if config.get("dtype", "fp16") not in ("fp16", "bf16", "fp32"):
         raise ValueError("config.dtype must be fp16, bf16 or fp32")
+    from . import coreml  # noqa: PLC0415
+
+    coreml.validate_config(config.get("coreml"))
 
 
 def make(manifest, path: Path) -> FaceModel:

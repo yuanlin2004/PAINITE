@@ -32,6 +32,10 @@ class Worker:
         self._wake = threading.Event()
         self._stop = threading.Event()
         self._threads: list[threading.Thread] = []
+        # Core ML (Macs) converts each model for the window every tile gets.
+        for model in registry.models.values():
+            if hasattr(model, "tiling"):
+                model.tiling = (settings.tile_size, settings.tile_overlap)
 
     def start(self) -> None:
         self._threads = [
@@ -55,7 +59,7 @@ class Worker:
         """Load the default models at startup so the first job is not a cold start."""
         for model_id in self.registry.defaults.values():
             model = self.registry.get(model_id)
-            load = getattr(model, "load", None)
+            load = getattr(model, "prepare_coreml", None) or getattr(model, "load", None)
             if load is None or self._stop.is_set():
                 continue
             try:

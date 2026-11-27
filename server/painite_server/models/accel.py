@@ -1,6 +1,7 @@
 """Optional accelerated backends for a model's network on NVIDIA GPUs:
 TensorRT engines and torch.compile. PyTorch stays the reference and the
-fallback; Apple MPS and the CPU always run PyTorch.
+fallback; the CPU always runs PyTorch, and on Apple MPS Core ML takes this
+role instead (models/coreml.py).
 
 Which backend a model asks for is in its manifest's `config.accel`, one spec
 or a list tried in order (PyTorch is always the last resort):

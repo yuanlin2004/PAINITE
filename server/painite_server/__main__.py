@@ -57,6 +57,7 @@ def _parser() -> argparse.ArgumentParser:
     mr = msub.add_parser("remove")
     mr.add_argument("model")
     msub.add_parser("verify", help="check installed files against their SHA-256")
+    msub.add_parser("coreml", help="on a Mac: convert installed models to Core ML now (else done at first start)")
     return parser
 
 
@@ -228,6 +229,9 @@ def _models(args, settings: Settings) -> int:
         print(f"Removed {args.model}. Restart the server to unload it.", file=sys.stderr)
         return 0
 
+    if args.mcmd == "coreml":
+        return _models_coreml(settings)
+
     if args.mcmd == "verify":
         bad = 0
         for m, d in mf.installed(settings.data_dir):
@@ -236,6 +240,36 @@ def _models(args, settings: Settings) -> int:
             bad += bool(problems)
         return 1 if bad else 0
     return 2
+
+
+def _models_coreml(settings: Settings) -> int:
+    """Convert and compile every installed model for Core ML, so the server's
+    first start does not spend minutes on it (install-mac.sh runs this)."""
+    import logging
+
+    from .models import coreml, default_registry
+
+    if not coreml.available():
+        print("Core ML is not used here (needs an Apple Silicon Mac with coremltools; PAINITE_COREML=off "
+              "turns it off).", file=sys.stderr)
+        return 0
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    reg = default_registry(settings.data_dir)
+    bad = 0
+    for model in reg.models.values():
+        prepare = getattr(model, "prepare_coreml", None)
+        if prepare is None:
+            continue
+        if hasattr(model, "tiling"):
+            model.tiling = (settings.tile_size, settings.tile_overlap)
+        try:
+            prepare()
+        except Exception as e:  # noqa: BLE001 - report and go on with the next model
+            print(f"error: {model.id}: {e}", file=sys.stderr)
+            bad += 1
+            continue
+        print(f"{model.id}\t{model.engine()}")
+    return 1 if bad else 0
 
 
 if __name__ == "__main__":

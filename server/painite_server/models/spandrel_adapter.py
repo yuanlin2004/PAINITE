@@ -30,7 +30,7 @@ from typing import Any
 
 import numpy as np
 
-from . import Model, devices
+from . import Model, coreml, devices
 
 log = logging.getLogger("painite.models")
 
@@ -90,6 +90,7 @@ def validate_config(config: dict[str, Any], scale: int) -> None:
             raise ValueError(f"unknown postprocess step {kind!r}")
     if effective != scale:
         raise ValueError(f"model_scale and postprocess give {effective}x, manifest says {scale}x")
+    coreml.validate_config(config.get("coreml"))
 
 
 @dataclass
@@ -102,6 +103,31 @@ class SpandrelModel(Model):
     # Optional accelerated backend (models/accel.py), set by the registry.
     accel: Any = field(default=None, repr=False)
     accel_model_dir: Path | None = field(default=None, repr=False)
+    _coreml: Any = field(default=None, repr=False)  # coreml.Runner when Core ML runs this model
+    # (tile, overlap) of the server, set by the worker before any tile runs:
+    # Core ML takes exactly the standard window that tiling gives.
+    tiling: tuple[int, int] | None = None
+
+    def coreml_window(self, tile: int, overlap: int) -> int:
+        """Side of the window every tile gets (tile + context on both sides),
+        the input size Core ML is converted for (imaging/pipeline.py:_window)."""
+        return tile + 2 * max(overlap, self.receptive_padding)
+
+    def prepare_coreml(self) -> None:
+        """Load, and convert (or load the cached) Core ML model for the standard
+        window now rather than at the first tile. No-op off a Mac."""
+        self.load()
+        if self._coreml is not None and self.tiling is not None:
+            self._coreml.prepare(self.coreml_window(*self.tiling))
+
+    def engine(self) -> str:
+        return self._coreml.describe() if self._coreml is not None and not self._coreml.failed else "PyTorch"
+
+    def _setup_coreml(self, arch: str, build) -> None:
+        choice = coreml.choose(arch, self.config, self.device)
+        if choice is not None and self.tiling is not None:
+            self._coreml = coreml.Runner(self.id, build, self.weights_path.parent / "coreml", *choice)
+            self._coreml.sizes.add(self.coreml_window(*self.tiling))
 
     def load(self) -> None:
         """Load weights onto the device. Called lazily by the worker thread."""
@@ -128,13 +154,20 @@ class SpandrelModel(Model):
             desc.model.to(self._dtype)
             configure_determinism()
             self._net = desc
-            log.info("loaded %s (%s, %s, %s)", self.id, desc.architecture.name, self.device, dtype)
+            path = self.weights_path
+            self._setup_coreml(desc.architecture.name,
+                               lambda: spandrel.ModelLoader().load_from_file(str(path)).model.float().eval())
+            log.info("loaded %s (%s, %s, %s%s)", self.id, desc.architecture.name, self.device, dtype,
+                     f"; {self._coreml.describe()} at the standard tile size" if self._coreml else "")
         self._start_accel()
 
     # Accelerated backend hooks (models/accel.py) -----------------------------
 
     @property
     def backend(self) -> str:
+        # Core ML exists only on a Mac (MPS), where the CUDA backends never run.
+        if self._coreml is not None:
+            return self._coreml.backend
         return self.accel.backend if self.accel is not None else "pytorch"
 
     def begin_job(self) -> None:
@@ -142,6 +175,8 @@ class SpandrelModel(Model):
             self.accel.begin_job()
 
     def accel_status(self) -> dict | None:
+        if self._coreml is not None:
+            return self._coreml.status()
         return self.accel.status() if self.accel is not None else None
 
     def _start_accel(self) -> None:
@@ -167,6 +202,12 @@ class SpandrelModel(Model):
         return call
 
     def _forward(self, x):
+        """The network on a 1x3xHxW float32 batch on the device: Core ML (Macs)
+        when it handles this window, else PyTorch. fp32 out, not clamped."""
+        if self._coreml is not None:
+            y = self._coreml.run(x.cpu().numpy())
+            if y is not None:
+                return _torch().from_numpy(y).to(self.device)
         return self.accel_call(self._net)(x)
 
     def run(self, tile: np.ndarray) -> np.ndarray:
