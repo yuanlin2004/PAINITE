@@ -195,8 +195,11 @@ def run(
 
         tiles = None
         if cache is not None and cache_key is not None and not st.model.placeholder:
-            earlier = tuple((p.model.id, json.dumps(p.params, sort_keys=True)) for p in steps[:k - 1])
-            tiles = _TileStore(cache, (cache_key, earlier, st.model.id), cache_write)
+            # The backend (PyTorch, TensorRT, ...) is part of the key: their outputs differ slightly.
+            earlier = tuple((p.model.id, p.model.backend, json.dumps(p.params, sort_keys=True))
+                            for p in steps[:k - 1])
+            tiles = _TileStore(cache, (cache_key, earlier, st.model.id, st.model.backend), cache_write,
+                               st.model)
         out = _process_tiles(window, local, (want.x, want.y), (in_w, in_h), st.model, st.params, tile, pad,
                              band, step_progress, is_canceled, tiles)
         timings["inference"] += (time.perf_counter() - t1) * 1000
@@ -412,16 +415,19 @@ def _process_tiles(
 
 @dataclass
 class _TileStore:
-    """One step's view of the tile cache: keys are `prefix + window span`."""
+    """One step's view of the tile cache: keys are `prefix + window span`.
+    The prefix names the model's backend when the step started; a tile is not
+    stored if the model fell back to another backend since (models/accel.py)."""
     cache: TileCache
     prefix: tuple
     write: bool
+    model: Model | None = None
 
     def get(self, span: tuple) -> np.ndarray | None:
         return self.cache.get((*self.prefix, span))
 
     def put(self, span: tuple, value: np.ndarray) -> None:
-        if self.write:
+        if self.write and (self.model is None or self.model.backend == self.prefix[-1]):
             self.cache.put((*self.prefix, span), value)
 
 

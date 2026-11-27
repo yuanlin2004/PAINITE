@@ -90,6 +90,8 @@ class Worker:
             m = self.registry.get(st["model"])
             if m is None:
                 missing = missing or st["model"]
+            else:
+                m.begin_job()  # a finished engine build switches in here, never mid-job
             steps.append(pipeline.Step(model=m, params=st["params"]))
         last_progress = [0.0]
 
@@ -102,7 +104,9 @@ class Worker:
             row = self.store.get_job(None, job_id)
             return row is None or bool(row["cancel_requested"])
 
-        log.info("job start id=%s kind=%s op=%s model=%s", job_id, job["kind"], job["operation"], job["model"])
+        backends = ",".join(s.model.backend for s in steps if s.model is not None)
+        log.info("job start id=%s kind=%s op=%s model=%s backend=%s", job_id, job["kind"], job["operation"],
+                 job["model"], backends)
         try:
             if missing is not None:
                 raise ApiError(409, "model_unavailable", f"model {missing} is not installed")

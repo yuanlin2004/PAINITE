@@ -172,6 +172,7 @@ class ArchModel(SpandrelModel):
             self._setup_coreml(self.arch, self._build_cpu)
             log.info("loaded %s (%s, %s, %s%s)", self.id, self.arch, self.device, dtype,
                      f"; {self._coreml.describe()} at the standard tile size" if self._coreml else "")
+        self._start_accel()
 
     def _build_cpu(self):
         """A fresh fp32 CPU copy of the network, for Core ML conversion."""
@@ -184,7 +185,23 @@ class ArchModel(SpandrelModel):
 
     def coreml_window(self, tile: int, overlap: int) -> int:
         w = super().coreml_window(tile, overlap)
-        return w + (-w % self._pad_multiple)  # Core ML sees the padded window
+        return w + (-w % self.accel_multiple)  # Core ML sees the padded window
+
+    @property
+    def accel_multiple(self) -> int:
+        """Engines are built for the padded window (models/accel.py)."""
+        return int(self.config.get("pad_multiple", ARCHES[self.arch].pad_multiple))
+
+    def accel_module(self):
+        return self._net
+
+    def accel_call(self, net):
+        dtype = self._dtype
+
+        def call(x):
+            return net(x.to(dtype)).float()
+
+        return call
 
     def run(self, tile: np.ndarray) -> np.ndarray:
         torch = _torch()
@@ -192,16 +209,12 @@ class ArchModel(SpandrelModel):
         with torch.inference_mode():
             x = torch.from_numpy(np.ascontiguousarray(tile.transpose(2, 0, 1)))[None].to(self.device)
             h, w = x.shape[-2:]
-            y = self._forward_padded(pad_to_multiple(x, self._pad_multiple))[..., :h, :w].clamp_(0, 1)
+            # Reflect padding copies pixels, so padding in fp32 then casting equals casting then padding.
+            xp = pad_to_multiple(x, self._pad_multiple)
+            y = self.accel.call(xp, self._forward) if self.accel is not None else self._forward(xp)
+            y = y[..., :h, :w].clamp_(0, 1)
             return y[0].permute(1, 2, 0).cpu().numpy().astype(np.float32, copy=False)
 
-
-    def _forward_padded(self, xp):
-        if self._coreml is not None:
-            y = self._coreml.run(xp.cpu().numpy())
-            if y is not None:
-                return _torch().from_numpy(y).to(self.device)
-        return self._net(xp.to(self._dtype)).float()
 
 
 def make(manifest, path: Path) -> ArchModel:

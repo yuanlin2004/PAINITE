@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 200" width="900" height="200" role="img" aria-label="As one engine, TensorRT merges the attention blocks with the final full-size layers and gets them wrong; as two engines split between them, the result is correct"><style>
+.box{fill:#f6f7f5;stroke:#c9d0cc;stroke-width:1.5}.box.hl{stroke:#1f7a8c;stroke-width:2}.box.bad{stroke:#c0392b;stroke-width:2}.box.ok{stroke:#4f8a2b;stroke-width:2}
+.grp{fill:none;stroke:#5d6662;stroke-dasharray:5 4;stroke-width:1.2}
+text{fill:#1b1f1d;font:13px "Source Sans 3","Segoe UI",Helvetica,Arial,sans-serif}
+text.t{font:700 14px "Archivo","Helvetica Neue",Arial,sans-serif}text.s{fill:#5d6662;font-size:12px}
+text.m{font:12px "JetBrains Mono",Menlo,Consolas,monospace}
+.arr{stroke:#5d6662;stroke-width:1.6;fill:none}.ahp{fill:#5d6662}
+</style><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ahp" d="M0 0L10 5L0 10z"/></marker></defs><rect width="100%" height="100%" fill="#ffffff"/>
+    <text class="t" x="10" y="22">Before: one engine</text>
+    <rect class="grp" x="10" y="35" width="420" height="80" rx="8"/>
+    <rect class="box" x="25" y="55" width="110" height="40" rx="5"/><text x="80" y="80" text-anchor="middle">encoder</text>
+    <rect class="box" x="145" y="55" width="130" height="40" rx="5"/><text x="210" y="80" text-anchor="middle">attention blocks</text>
+    <rect class="box bad" x="285" y="55" width="130" height="40" rx="5"/><text x="350" y="80" text-anchor="middle">full-size tail</text>
+    <text class="s" x="220" y="140" text-anchor="middle">merged into one fused kernel on the Spark → wrong image, no error</text>
+    <text class="t" x="470" y="22">After: two engines</text>
+    <rect class="grp" x="470" y="35" width="290" height="80" rx="8"/><rect class="grp" x="770" y="35" width="120" height="80" rx="8"/>
+    <rect class="box" x="485" y="55" width="110" height="40" rx="5"/><text x="540" y="80" text-anchor="middle">encoder</text>
+    <rect class="box" x="605" y="55" width="140" height="40" rx="5"/><text x="675" y="80" text-anchor="middle">attention blocks</text>
+    <rect class="box ok" x="780" y="55" width="100" height="40" rx="5"/><text x="830" y="80" text-anchor="middle">tail</text>
+    <text class="s" x="680" y="140" text-anchor="middle">split between them → correct, still 16-bit, ~4% overhead</text>
+    <text class="s" x="450" y="185" text-anchor="middle">Motion unblur on a 24 MP photo: 16.6 s with the torch.compile fallback → 14.1 s with the fixed TensorRT engines</text>
+  </svg>

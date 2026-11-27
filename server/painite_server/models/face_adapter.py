@@ -425,6 +425,14 @@ class FaceModel(Model):
         if self._coreml is not None:
             self._coreml.prepare(int(self.config.get("face_size", 512)))
 
+    @property
+    def backend(self) -> str:
+        """The restorer's engine (part of the tile cache key; models/coreml.py)."""
+        return self._coreml.backend if self._coreml is not None else "pytorch"
+
+    def accel_status(self) -> dict | None:
+        return self._coreml.status() if self._coreml is not None else None
+
     def engine(self) -> str:
         if self._coreml is not None and not self._coreml.failed:
             return f"restorer on {self._coreml.describe()}"

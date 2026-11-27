@@ -13,8 +13,11 @@ Wants=network-online.target
 [Service]
 Environment=PAINITE_IMAGE=painite-server:latest
 Environment=PAINITE_PORT=8443
+# TensorRT / torch.compile acceleration: auto, off, tensorrt or compile (models/accel.py).
+Environment=PAINITE_ACCEL=auto
 ExecStartPre=-/usr/bin/docker rm -f painite-server
 ExecStart=/usr/bin/docker run --rm --name painite-server --gpus all --network host \
+  -e PAINITE_ACCEL=${PAINITE_ACCEL} \
   -v /var/lib/painite:/var/lib/painite ${PAINITE_IMAGE} serve --port ${PAINITE_PORT}
 ExecStop=/usr/bin/docker stop -t 30 painite-server
 Restart=on-failure

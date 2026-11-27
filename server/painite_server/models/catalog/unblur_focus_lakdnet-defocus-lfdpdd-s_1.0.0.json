@@ -39,6 +39,10 @@
         9,
         9
       ]
+    },
+    "accel": {
+      "backend": "tensorrt",
+      "precision": "fp16"
     }
   },
   "default": true

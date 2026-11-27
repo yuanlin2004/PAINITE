@@ -247,9 +247,35 @@ class Runner:
         self.failed = False
         self._models: dict[int, Any] = {}
         self._lock = threading.RLock()
+        self._busy = False  # converting or loading
+        self.detail = ""
 
     def describe(self) -> str:
         return f"Core ML, {self.units.replace('_', ' ')}, {self.precision}"
+
+    @property
+    def label(self) -> str:
+        return f"coreml-{self.units.replace('_', '-')}-{self.precision}"
+
+    @property
+    def backend(self) -> str:
+        """What runs the standard window now (part of the tile cache key, like
+        models/accel.py): Core ML once its model is loaded, PyTorch before and
+        after a failure."""
+        return self.label if self._models and not self.failed else "pytorch"
+
+    def status(self) -> dict:
+        """For /health, in the shape of accel.Accelerator.status()."""
+        if self.failed:
+            state = "failed"
+        elif self._models:
+            state = "active"
+        elif self._busy:
+            state = "building"
+        else:
+            state = "idle"
+        return {"backend": self.backend, "target": self.label, "state": state, "detail": self.detail,
+                "candidates": [self.label], "skipped": [self.label] if self.failed else []}
 
     def handles(self, shape: tuple[int, ...]) -> bool:
         """True when Core ML runs a 1x3xHxW input of this shape."""
@@ -265,13 +291,17 @@ class Runner:
                 return False
             if size in self._models:
                 return True
+            self._busy = True
             try:
                 self._models[size] = self._load(size)
                 return True
-            except Exception:  # noqa: BLE001 - any failure: PyTorch still works
+            except Exception as e:  # noqa: BLE001 - any failure: PyTorch still works
                 log.exception("%s: Core ML conversion failed; using PyTorch (MPS)", self.model_id)
                 self.failed = True
+                self.detail = f"{type(e).__name__}: {e}"[:300]
                 return False
+            finally:
+                self._busy = False
 
     def _load(self, size: int):
         import coremltools as ct  # noqa: PLC0415

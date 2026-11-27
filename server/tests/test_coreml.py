@@ -67,7 +67,11 @@ def test_runner_handles_only_prepared_square_windows(tmp_path):
     assert r.handles((1, 3, 640, 640))
     assert not r.handles((1, 3, 640, 512))  # an image smaller than one window: PyTorch
     assert not r.handles((1, 3, 512, 512))
+    assert r.backend == "pytorch" and r.status()["state"] == "idle"
+    r._models[640] = object()
+    assert r.backend == "coreml-gpu-fp16" and r.status()["state"] == "active"
     r.failed = True
+    assert r.backend == "pytorch" and r.status()["state"] == "failed"
     assert not r.handles((1, 3, 640, 640))
     assert r.run(np.zeros((1, 3, 512, 512), np.float32)) is None
 
@@ -156,6 +160,7 @@ def test_real_conversion_matches_pytorch_and_preview_matches_export(tmp_path, ti
     model.config["coreml"] = {"compute_units": "gpu", "precision": "fp32"}
     model.prepare_coreml()
     assert model.engine() == "Core ML, gpu, fp32"
+    assert model.backend == "coreml-gpu-fp32" and model.accel_status()["state"] == "active"
     assert list((tmp_path / "coreml").glob("80-fp32-*.mlmodelc"))
 
     window = np.random.default_rng(1).random((80, 80, 3), dtype=np.float32)

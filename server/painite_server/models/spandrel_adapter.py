@@ -100,6 +100,9 @@ class SpandrelModel(Model):
     device: str = "auto"  # see devices.py
     _net: Any = field(default=None, repr=False)
     _dtype: Any = field(default=None, repr=False)
+    # Optional accelerated backend (models/accel.py), set by the registry.
+    accel: Any = field(default=None, repr=False)
+    accel_model_dir: Path | None = field(default=None, repr=False)
     _coreml: Any = field(default=None, repr=False)  # coreml.Runner when Core ML runs this model
     # (tile, overlap) of the server, set by the worker before any tile runs:
     # Core ML takes exactly the standard window that tiling gives.
@@ -125,18 +128,6 @@ class SpandrelModel(Model):
         if choice is not None and self.tiling is not None:
             self._coreml = coreml.Runner(self.id, build, self.weights_path.parent / "coreml", *choice)
             self._coreml.sizes.add(self.coreml_window(*self.tiling))
-
-    def _forward(self, x):
-        """The network on a 1x3xHxW float32 batch on the device: Core ML when it
-        handles this size, else PyTorch. Returns float32 on the device."""
-        torch = _torch()
-        if self._coreml is not None:
-            y = self._coreml.run(x.cpu().numpy())
-            if y is not None:
-                return torch.from_numpy(y).to(self.device)
-        use_autocast = self._dtype != torch.float32 and self.device == "cuda"
-        with torch.autocast(self.device, dtype=self._dtype, enabled=use_autocast):
-            return self._net(x.to(self._dtype)).float()
 
     def load(self) -> None:
         """Load weights onto the device. Called lazily by the worker thread."""
@@ -168,13 +159,64 @@ class SpandrelModel(Model):
                                lambda: spandrel.ModelLoader().load_from_file(str(path)).model.float().eval())
             log.info("loaded %s (%s, %s, %s%s)", self.id, desc.architecture.name, self.device, dtype,
                      f"; {self._coreml.describe()} at the standard tile size" if self._coreml else "")
+        self._start_accel()
+
+    # Accelerated backend hooks (models/accel.py) -----------------------------
+
+    @property
+    def backend(self) -> str:
+        # Core ML exists only on a Mac (MPS), where the CUDA backends never run.
+        if self._coreml is not None:
+            return self._coreml.backend
+        return self.accel.backend if self.accel is not None else "pytorch"
+
+    def begin_job(self) -> None:
+        if self.accel is not None:
+            self.accel.begin_job()
+
+    def accel_status(self) -> dict | None:
+        if self._coreml is not None:
+            return self._coreml.status()
+        return self.accel.status() if self.accel is not None else None
+
+    def _start_accel(self) -> None:
+        if self.accel is not None:
+            self.accel.start(self)
+
+    def accel_module(self):
+        """The bare network (spandrel's descriptor wraps it in inference_mode,
+        which breaks torch.compile)."""
+        return self._net.model
+
+    def accel_call(self, net):
+        """`net` as the server runs it: fp32 NCHW in, cast to the model dtype
+        under autocast, fp32 out (not clamped)."""
+        torch = _torch()
+        dtype, device = self._dtype, self.device
+        use_autocast = dtype != torch.float32 and device == "cuda"
+
+        def call(x):
+            with torch.autocast(device, dtype=dtype, enabled=use_autocast):
+                return net(x.to(dtype)).float()
+
+        return call
+
+    def _forward(self, x):
+        """The network on a 1x3xHxW float32 batch on the device: Core ML (Macs)
+        when it handles this window, else PyTorch. fp32 out, not clamped."""
+        if self._coreml is not None:
+            y = self._coreml.run(x.cpu().numpy())
+            if y is not None:
+                return _torch().from_numpy(y).to(self.device)
+        return self.accel_call(self._net)(x)
 
     def run(self, tile: np.ndarray) -> np.ndarray:
         torch = _torch()
         self.load()
         with torch.inference_mode():
             x = torch.from_numpy(np.ascontiguousarray(tile.transpose(2, 0, 1)))[None].to(self.device)
-            y = self._forward(x).clamp_(0, 1)
+            y = self.accel.call(x, self._forward) if self.accel is not None else self._forward(x)
+            y = y.clamp_(0, 1)
             for step in self.config.get("postprocess", []):
                 if step["type"] == "area_downscale":
                     y = area_downscale(y, int(step["factor"]))
