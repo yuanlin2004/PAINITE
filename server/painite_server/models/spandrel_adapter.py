@@ -99,6 +99,9 @@ class SpandrelModel(Model):
     device: str = "auto"  # see devices.py
     _net: Any = field(default=None, repr=False)
     _dtype: Any = field(default=None, repr=False)
+    # Optional accelerated backend (models/accel.py), set by the registry.
+    accel: Any = field(default=None, repr=False)
+    accel_model_dir: Path | None = field(default=None, repr=False)
 
     def load(self) -> None:
         """Load weights onto the device. Called lazily by the worker thread."""
@@ -126,15 +129,52 @@ class SpandrelModel(Model):
             configure_determinism()
             self._net = desc
             log.info("loaded %s (%s, %s, %s)", self.id, desc.architecture.name, self.device, dtype)
+        self._start_accel()
+
+    # Accelerated backend hooks (models/accel.py) -----------------------------
+
+    @property
+    def backend(self) -> str:
+        return self.accel.backend if self.accel is not None else "pytorch"
+
+    def begin_job(self) -> None:
+        if self.accel is not None:
+            self.accel.begin_job()
+
+    def accel_status(self) -> dict | None:
+        return self.accel.status() if self.accel is not None else None
+
+    def _start_accel(self) -> None:
+        if self.accel is not None:
+            self.accel.start(self)
+
+    def accel_module(self):
+        """The bare network (spandrel's descriptor wraps it in inference_mode,
+        which breaks torch.compile)."""
+        return self._net.model
+
+    def accel_call(self, net):
+        """`net` as the server runs it: fp32 NCHW in, cast to the model dtype
+        under autocast, fp32 out (not clamped)."""
+        torch = _torch()
+        dtype, device = self._dtype, self.device
+        use_autocast = dtype != torch.float32 and device == "cuda"
+
+        def call(x):
+            with torch.autocast(device, dtype=dtype, enabled=use_autocast):
+                return net(x.to(dtype)).float()
+
+        return call
+
+    def _forward(self, x):
+        return self.accel_call(self._net)(x)
 
     def run(self, tile: np.ndarray) -> np.ndarray:
         torch = _torch()
         self.load()
         with torch.inference_mode():
             x = torch.from_numpy(np.ascontiguousarray(tile.transpose(2, 0, 1)))[None].to(self.device)
-            use_autocast = self._dtype != torch.float32 and self.device == "cuda"
-            with torch.autocast(self.device, dtype=self._dtype, enabled=use_autocast):
-                y = self._net(x.to(self._dtype)).float()
+            y = self.accel.call(x, self._forward) if self.accel is not None else self._forward(x)
             y = y.clamp_(0, 1)
             for step in self.config.get("postprocess", []):
                 if step["type"] == "area_downscale":

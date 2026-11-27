@@ -24,7 +24,17 @@
     "weights": "stripformer_RealBlur_J.pth",
     "dtype": "fp16",
     "context": 64,
-    "pad_multiple": 8
+    "pad_multiple": 8,
+    "accel": [
+      {
+        "backend": "tensorrt",
+        "precision": "fp16",
+        "split_after": ["net.decoder.de_block_6"]
+      },
+      {
+        "backend": "compile"
+      }
+    ]
   },
   "default": true
 }

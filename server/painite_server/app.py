@@ -25,7 +25,7 @@ def create_app(settings: Settings | None = None, registry: Registry | None = Non
     settings = settings or Settings()
     settings.ensure_dirs()
     store = Store(settings.db_path)
-    registry = registry or default_registry(settings.data_dir)
+    registry = registry or default_registry(settings.data_dir, settings.tile_size, settings.tile_overlap)
     worker = Worker(settings, store, registry)
 
     @asynccontextmanager

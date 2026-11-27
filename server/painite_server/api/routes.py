@@ -176,7 +176,20 @@ def health(request: Request) -> dict:
         "version": __version__,
         "gpu": state.gpu,
         "queue": {**counts, "capacity": state.settings.queue_capacity},
+        "accel": _accel_status(state.registry),
     }
+
+
+def _accel_status(reg) -> dict:
+    """Each model's backend: what runs now, what it is building toward (models/accel.py)."""
+    from ..models import accel  # noqa: PLC0415
+
+    models = {}
+    for model_id, m in reg.models.items():
+        st = m.accel_status()
+        if st is not None:
+            models[model_id] = st
+    return {"mode": accel.mode_label(), "models": models}
 
 
 @router.get("/ca.pem")
