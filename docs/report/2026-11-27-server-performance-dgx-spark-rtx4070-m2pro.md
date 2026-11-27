@@ -26,15 +26,7 @@ Each machine ran the same six enhancement tasks on the same two real photos, thr
 
 How a photo travels through PAINITE (93–98% of the time goes to the AI model step, so its speed decides the ranking):
 
-```mermaid
-flowchart LR
-  A[Mac app / CLI] -->|photo| B[Cut into 640 px tiles]
-  subgraph S[PAINITE server]
-    B --> C[AI model per tile<br/>TensorRT · torch.compile · Core ML · PyTorch]
-    C --> D[Stitch + encode JPEG]
-  end
-  D -->|result| A
-```
+![How a photo travels through PAINITE](2026-11-27-server-performance/how-a-photo-is-processed.svg)
 
 The tests:
 * **Full photo, 24 MP:** a 6000×4000 group photo with 10 faces, the size of a modern full-frame camera.
@@ -70,28 +62,13 @@ Every model is written in PyTorch, the standard AI framework. Running it as-is i
 
 What happens on first start:
 
-```mermaid
-flowchart LR
-  P[PyTorch model] --> C[Convert<br/>TensorRT / torch.compile / Core ML]
-  C --> Q{Quality check<br/>matches PyTorch<br/>on test tiles?}
-  Q -->|pass| U[Use it, save it<br/>restarts just load it]
-  Q -->|fail| N[Try next method<br/>last resort: PyTorch]
-```
+![What happens on first start](2026-11-27-server-performance/first-start.svg)
 
 **Best configuration used for the comparison:** TensorRT for the five photo-wide tasks on both NVIDIA machines, and Core ML on the Mac. The face task runs mostly on PyTorch everywhere, because its restorer can't be made faster safely.
 
 **A bug we fixed along the way.** On the Spark, TensorRT's motion-unblur engine first came out subtly wrong. The final step of the image was miscomputed, and no error was raised. The server's quality check caught it, and the Spark fell back to torch.compile. We traced it to TensorRT merging two parts of the network that don't merge correctly on this chip. Building that model as two engines fixes it, so the Spark now uses TensorRT for all five tasks. Motion unblur is 15% faster than with the fallback (16.6 s → 14.1 s on a 24 MP photo), and the results below include the fix. On the 4070 the two-engine version costs about 1%.
 
-```mermaid
-flowchart LR
-  subgraph Before[Before: one engine, wrong on the Spark]
-    E1[encoder] --> A1[attention blocks] --> T1[full-size tail]
-  end
-  subgraph After[After: two engines, correct]
-    E2[encoder] --> A2[attention blocks]
-    A2 -.engine boundary.-> T2[tail]
-  end
-```
+![Stripformer as one TensorRT engine (wrong on the Spark) and as two engines (correct)](2026-11-27-server-performance/stripformer-fix.svg)
 
 ## How the machines compare
 
