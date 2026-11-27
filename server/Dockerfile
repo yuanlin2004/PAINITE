@@ -1,6 +1,12 @@
 # painite-server on an NVIDIA NGC PyTorch base (multi-arch; arm64 for DGX Spark / GB10).
 # Build:  docker build -t painite-server server/
 # Run:    docker run --gpus all -p 8443:8443 -v /var/lib/painite:/var/lib/painite painite-server
+#
+# The image has no model weights; until they are pulled into the data volume,
+# placeholder models answer and photos come back unchanged. Pull them once:
+#   docker run --rm -v /var/lib/painite:/var/lib/painite painite-server models pull --all --accept-license
+# The release installer (install.sh) does this and the TLS/token setup for you:
+# https://yuanlin2004.github.io/PAINITE/install.html
 ARG BASE_IMAGE=nvcr.io/nvidia/pytorch:25.10-py3
 FROM ${BASE_IMAGE}
 

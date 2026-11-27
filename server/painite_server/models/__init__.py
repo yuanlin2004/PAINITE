@@ -107,6 +107,11 @@ class Registry:
     def get(self, model_id: str) -> Model | None:
         return self.models.get(model_id)
 
+    def placeholder_operations(self) -> list[str]:
+        """Operations whose default model is a built-in placeholder, i.e. no
+        real model is installed for them."""
+        return sorted(op for op, mid in self.defaults.items() if self.models[mid].placeholder)
+
 
 OPERATION_PARAMS = {
     "denoise": {"strength": {"min": 0.0, "max": 1.0, "default": 0.5}},

@@ -168,3 +168,13 @@ def test_token_create_output(tmp_path, capsys):
     out = capsys.readouterr()
     assert out.out.strip().startswith("pnt_")
     assert "tok_" not in out.err and "pnt_" in out.err
+
+
+def test_placeholder_operations(tmp_path):
+    from painite_server.models import IdentityModel
+
+    reg = default_registry(tmp_path / "empty")
+    assert reg.placeholder_operations() == sorted(reg.defaults)
+    reg.add(IdentityModel(id="denoise/real@1.0.0", operation="denoise", version="1.0.0"), default=True)
+    assert "denoise" not in reg.placeholder_operations()
+    assert "sharpen" in reg.placeholder_operations()
