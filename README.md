@@ -31,7 +31,7 @@ Version 1.2 has six enhancements: denoise, sharpen, unblur (motion and focus), f
 | [`site/`](site/build.py) | User guide, published to GitHub Pages |
 | [`bench/`](bench/) | Model bake-offs that chose each model |
 
-[Product requirements document](docs/PRD.md) · [Design](docs/DESIGN.md)
+[Product requirements document](docs/PRD.md) · [Design](docs/DESIGN.md) · [Server performance report](docs/report/2026-11-27-server-performance-dgx-spark-rtx4070-m2pro.md)
 
 ## License
 
