@@ -58,13 +58,13 @@ cd painite-server_{{version}}</code></pre>
   <li>
     <p>Run the Mac installer as yourself, <strong>not</strong> with sudo:</p>
 <pre><code>./install-mac.sh</code></pre>
-    <p>It installs the server with PyTorch (about 1 GB) in <code>~/Library/Application Support/painite-server</code>, creates the private certificate, asks you to accept the model licenses and downloads the models, then starts the server. It starts again each time you log in. It also installs the <code>painite-server</code> command in <code>~/.local/bin</code>; use it without sudo.</p>
+    <p>It installs the server with PyTorch (about 1 GB) in <code>~/Library/Application Support/painite-server</code>, creates the private certificate, asks you to accept the model licenses and downloads the models, converts them to Core ML for speed (about 4 minutes), then starts the server. It starts again each time you log in. It also installs the <code>painite-server</code> command in <code>~/.local/bin</code>; use it without sudo.</p>
   </li>
   <li><p>When it finishes, it prints the address, <code>https://localhost:8443</code>, and the CA fingerprint. Continue with <a href="#token">step 2</a>, leaving out <code>sudo</code>.</p></li>
 </ol>
 <div class="note">
   <p>By default only this Mac can use the server. To let other computers use it too, run <code>./install-mac.sh --lan</code>; they then connect to <code>https://<em>name</em>.local:8443</code>. <code>./install-mac.sh --uninstall</code> stops and removes the server but keeps the models, tokens and certificate. The log is in <code>~/Library/Logs/painite-server.log</code>.</p>
-  <p>On an M2 Pro with 16 GB, previews take 3 to 5 seconds and a 24-megapixel photo takes 1 to 2 minutes, depending on the enhancement (about 30 seconds on a DGX Spark). The server uses up to about 9 GB of memory while it works.</p>
+  <p>On an M2 Pro with 16 GB, previews take 3 to 5 seconds and a 24-megapixel photo takes 30 seconds to 2 minutes, depending on the enhancement (15 to 35 seconds on a DGX Spark). To keep everything on PyTorch instead of Core ML, set <code>PAINITE_COREML=off</code> in the server's environment. The server uses up to about 9 GB of memory while it works.</p>
 </div>
 
 <h2 id="token">2. Create a token for each computer</h2>

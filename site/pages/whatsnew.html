@@ -1,5 +1,5 @@
 title: What's new
-description: What changed in each PAINITE release: the server on a Mac, face restoration and faster previews in 1.2, AI agents in 1.1, and the first release.
+description: What changed in each PAINITE release: a faster server on NVIDIA and Mac in 1.3, the server on a Mac, face restoration and faster previews in 1.2, AI agents in 1.1, and the first release.
 ---
 <div class="prose">
 <p class="eyebrow">What's new</p>
@@ -9,11 +9,22 @@ description: What changed in each PAINITE release: the server on a Mac, face res
 <div class="toc">
   <strong>Releases</strong>
   <ul>
+    <li><a href="#v1-3">PAINITE 1.3</a> · November 27, 2026</li>
     <li><a href="#v1-2">PAINITE 1.2</a> · November 23, 2026</li>
     <li><a href="#v1-1">PAINITE 1.1</a> · November 22, 2026</li>
     <li><a href="#v1-0">PAINITE 1.0</a> · November 22, 2026</li>
   </ul>
 </div>
+
+<h2 id="v1-3">PAINITE 1.3</h2>
+<p><small>November 27, 2026 · <a href="https://github.com/yuanlin2004/PAINITE/releases/tag/v1.3.0">Release notes</a></small></p>
+<h3>Up to twice as fast on NVIDIA GPUs</h3>
+<p>On a DGX Spark or a PC with an NVIDIA GPU, the server now builds faster versions of the models for your GPU (TensorRT and torch.compile) and uses them once they pass a check against the standard model. A 24-megapixel denoise takes 16 seconds instead of 32 on a DGX Spark, and most other enhancements are 1.3 to 2 times faster. Results look the same. Face restoration is unchanged.</p>
+<p>The builds run in the background for about 5 minutes after you install or upgrade, and the server uses the standard models until they're done. See the note in <a href="install.html">Install</a> for how to turn this off.</p>
+<h3>Faster on a Mac</h3>
+<p>The server on a Mac now runs the models through Core ML, on the Neural Engine for sharpen and upscale and on the GPU for the others. On an M2 Pro, a 24-megapixel sharpen takes 29 seconds instead of 76, and the other enhancements are 1.2 to 1.7 times faster. When you upgrade, <code>install-mac.sh</code> converts the models once, which takes about 4 minutes. See <a href="install.html#mac-server">Server on a Mac</a>.</p>
+<h3>Speed report</h3>
+<p>A new <a href="https://github.com/yuanlin2004/PAINITE/blob/main/docs/report/2026-11-27-server-performance-dgx-spark-rtx4070-m2pro.md">performance report</a> compares the server on a DGX Spark, a PC with an RTX 4070 and an M2 Pro MacBook Pro. The RTX 4070 is fastest, the DGX Spark is 1.1 to 1.6 times slower but has far more memory, and the M2 Pro is 2.3 to 8 times slower.</p>
 
 <h2 id="v1-2">PAINITE 1.2</h2>
 <p><small>November 23, 2026 · <a href="https://github.com/yuanlin2004/PAINITE/releases/tag/v1.2.0">Release notes</a></small></p>
