@@ -354,7 +354,7 @@ func cmdStatus(args []string, stdout, stderr io.Writer) int {
 				fmt.Fprintf(stdout, "\nNo real model is installed for: %s.\n", strings.Join(missing, ", "))
 				fmt.Fprintln(stdout, "Placeholders return the photo unchanged (upscale2x: a plain resize). On the server, run")
 				fmt.Fprintln(stdout, "  sudo painite-server models pull --all --accept-license")
-				fmt.Fprintln(stdout, "and restart it. See https://yuanlin2004.github.io/PAINITE/help.html#troubleshooting")
+				fmt.Fprintln(stdout, "and restart it. See https://yuanlin2004.github.io/PAINITE/help.html#placeholder")
 			}
 		}
 	}
