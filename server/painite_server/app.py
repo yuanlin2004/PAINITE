@@ -33,6 +33,11 @@ def create_app(settings: Settings | None = None, registry: Registry | None = Non
         requeued = store.requeue_running()
         if requeued:
             log.warning("requeued %d jobs interrupted by a restart", requeued)
+        missing = registry.placeholder_operations()
+        if missing:
+            log.warning("no model installed for %s: placeholders answer instead and return the photo unchanged "
+                        "(upscale2x: a plain resize). Run `painite-server models pull --all --accept-license` "
+                        "with this data directory (%s), then restart.", ", ".join(missing), settings.data_dir)
         worker.sweep(startup=True)
         if start_worker:
             worker.start()

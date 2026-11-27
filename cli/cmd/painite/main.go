@@ -350,6 +350,12 @@ func cmdStatus(args []string, stdout, stderr io.Writer) int {
 				}
 				fmt.Fprintf(stdout, "  %s%s\n", m.ID, note)
 			}
+			if missing := placeholderOperations(caps); len(missing) > 0 {
+				fmt.Fprintf(stdout, "\nNo real model is installed for: %s.\n", strings.Join(missing, ", "))
+				fmt.Fprintln(stdout, "Placeholders return the photo unchanged (upscale2x: a plain resize). On the server, run")
+				fmt.Fprintln(stdout, "  sudo painite-server models pull --all --accept-license")
+				fmt.Fprintln(stdout, "and restart it. See https://yuanlin2004.github.io/PAINITE/help.html#troubleshooting")
+			}
 		}
 	}
 	if capsErr != nil {
@@ -357,6 +363,23 @@ func cmdStatus(args []string, stdout, stderr io.Writer) int {
 		return exitFailed
 	}
 	return exitOK
+}
+
+// placeholderOperations returns the operations whose default model is a
+// built-in placeholder, i.e. the server has no real model installed for them.
+func placeholderOperations(caps *api.Capabilities) []string {
+	placeholder := map[string]bool{}
+	for _, m := range caps.Models {
+		placeholder[m.ID] = m.Placeholder
+	}
+	var ops []string
+	for _, op := range caps.Operations {
+		if placeholder[op.DefaultModel] {
+			ops = append(ops, op.Name)
+		}
+	}
+	sort.Strings(ops)
+	return ops
 }
 
 // cmdMCP serves the Model Context Protocol on stdin and stdout, so AI agents
