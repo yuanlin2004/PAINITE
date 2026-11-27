@@ -108,7 +108,7 @@ painite status</code></pre>
 <p>Next: <a href="cli.html">using the command line</a>.</p>
 
 <h2 id="upgrade">Upgrading</h2>
-<p><strong>Server:</strong> unpack the new release and run <code>sudo ./install.sh</code> again (<code>./install-mac.sh</code> on a Mac). Your certificate, tokens and models are kept, and it offers to download any new models. <strong>Mac app:</strong> replace the app in Applications. <strong>Command line:</strong> install the new package the same way.</p>
+<p><strong>Server:</strong> unpack the new release and run <code>sudo ./install.sh</code> again (<code>./install-mac.sh</code> on a Mac). Your certificate, tokens and models are kept, and it offers to download any new models. After an upgrade, an NVIDIA server rebuilds its faster models once in the background, so jobs are a little slower for about 5 minutes, and the Mac installer converts the models to Core ML again, which takes about 4 minutes. <strong>Mac app:</strong> replace the app in Applications. <strong>Command line:</strong> install the new package the same way.</p>
 <h3>Checksums</h3>
 <p>Each download has a SHA-256 checksum on the <a href="https://github.com/yuanlin2004/PAINITE/releases/tag/v{{version}}">release page</a>. To check the command line packages: <code>sha256sum -c --ignore-missing SHA256SUMS</code>.</p>
 </div>
