@@ -46,6 +46,11 @@ cd painite-server_{{version}}</code></pre>
   <p><strong>The first few minutes after the first start are slower.</strong> On an NVIDIA GPU, the server builds faster versions of most models for your GPU in the background, which takes about 5 minutes. It checks each one against the standard model before using it, and keeps using the standard models until then, or for good if a check fails. After that, photos process up to twice as fast. Builds are kept, so later starts take seconds; after an upgrade they are rebuilt once. To turn this off, add <code>Environment=PAINITE_ACCEL=off</code> to the service with <code>sudo systemctl edit painite-server</code>.</p>
 </div>
 
+<div class="note">
+  <p><strong>Use the installer rather than building <code>server/Dockerfile</code> by hand.</strong> The Docker image holds only the server's code, not the AI models, because some model licenses don't allow bundling them. The installer downloads the models after you accept their licenses. A server without them still starts, but answers with built-in placeholders that return your photo unchanged (Upscale only resizes it), and <code>painite status</code> marks each model <code>(placeholder)</code>. If you built and run the image yourself, download the models into the same data folder your server container mounts, then restart it:</p>
+<pre><code>docker run --rm -v /var/lib/painite:/var/lib/painite painite-server models pull --all --accept-license</code></pre>
+</div>
+
 <h3 id="mac-server">Server on a Mac (Apple silicon)</h3>
 <p>The server can also run on a Mac with Apple silicon, using the Mac's GPU. It's slower than a DGX Spark, but it's an easy way to try PAINITE, and the Mac app can use a server on the same Mac. <strong>You need:</strong> macOS 14 or later, 16 GB of memory or more, about 10 GB of free disk space, and <a href="https://docs.astral.sh/uv/">uv</a> (<code>brew install uv</code>) or Python 3.11 or newer. Docker isn't needed.</p>
 <ol class="steps">
@@ -99,7 +104,7 @@ sudo install painite /usr/local/bin/</code></pre>
 painite trust --fingerprint SHA256:…        # the fingerprint from step 1
 painite config set token pnt_…              # the token from step 2
 painite status</code></pre>
-<p><code>painite status</code> should report the server as <strong>ok</strong> and list its models. The Mac app and the command line tool share these settings, so setting up one sets up both on the same Mac.</p>
+<p><code>painite status</code> should report the server as <strong>ok</strong> and list its models. If the models are marked <code>(placeholder)</code>, the server has no models installed yet; see <a href="help.html#placeholder">Troubleshooting</a>. The Mac app and the command line tool share these settings, so setting up one sets up both on the same Mac.</p>
 <p>Next: <a href="cli.html">using the command line</a>.</p>
 
 <h2 id="upgrade">Upgrading</h2>

@@ -18,8 +18,10 @@ description: Troubleshooting PAINITE, limits, privacy, and the licenses of PAINI
 <p>Get the fingerprint on the server with <code>sudo painite-server admin fingerprint</code> and trust it again: <code>painite trust --fingerprint SHA256:…</code>, or <strong>Trust</strong> in the Mac app's Settings. If the server was reinstalled with <code>--new-ca</code>, every computer has to trust it again.</p>
 <h3>“Unauthorized”</h3>
 <p>The token is wrong or was revoked. Create a new one on the server with <code>sudo painite-server token create --name <em>computer</em></code> and enter it in Settings or with <code>painite config set token</code>.</p>
-<h3>A step says it uses a placeholder, or Unblur fails</h3>
-<p>The model isn't installed on the server. Run <code>sudo painite-server models list</code> to check, then <code>sudo painite-server models pull --all --accept-license</code> and <code>sudo systemctl restart painite-server</code>. Pulling downloads only what is missing.</p>
+<h3 id="placeholder">Models are marked “placeholder”, photos come back unchanged, or Unblur fails</h3>
+<p>The models aren't installed on the server, so built-in placeholders answer instead: they return the photo unchanged, and Upscale only resizes it. <code>painite status</code> marks them <code>(placeholder)</code>. Run <code>sudo painite-server models list</code> to check, then <code>sudo painite-server models pull --all --accept-license</code> and <code>sudo systemctl restart painite-server</code>. Pulling downloads only what is missing.</p>
+<p>This happens when the server image is built from <code>server/Dockerfile</code> by hand instead of with the installer, because the image doesn't include the models. Download them into the data folder your server container mounts, then restart the container:</p>
+<pre><code>docker run --rm -v /var/lib/painite:/var/lib/painite painite-server models pull --all --accept-license</code></pre>
 <h3>The server says “The NVIDIA driver on your system is too old”</h3>
 <p>The server needs NVIDIA driver 580 or newer (CUDA 13). <code>nvidia-smi</code> shows the version. On a GeForce or RTX card, install a newer driver (for example <code>sudo apt install nvidia-driver-580</code> on Ubuntu), reboot, then <code>sudo systemctl restart painite-server</code>. Without it, the server can't use the GPU.</p>
 <h3>macOS says PAINITE can't be opened</h3>
