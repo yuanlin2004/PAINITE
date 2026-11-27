@@ -54,7 +54,42 @@ def export_prep(net, shape) -> list[str]:
     return notes
 
 
-def build(model, shape: tuple, precision: str, typing: str):
+FENCE = "torch.ops.painite.fence.default"
+
+
+def register_fence(torch) -> None:
+    """`painite::fence`, an identity op TensorRT has no converter for: placed on
+    a tensor, it runs in PyTorch and so splits the network into separate engines
+    there (models/accel.py, `split_after`). Must be registered before an engine
+    that uses it is built or loaded."""
+    if hasattr(torch.ops.painite, "fence"):
+        return
+
+    @torch.library.custom_op("painite::fence", mutates_args=(), schema="(Tensor x) -> Tensor")
+    def fence(x):
+        return x.clone()
+
+    @fence.register_fake
+    def _(x):
+        return torch.empty_like(x)
+
+
+def split_at(torch, net, paths) -> list[str]:
+    """Fence the output of each named submodule of `net`."""
+    if not paths:
+        return []
+    register_fence(torch)
+    fence = torch.ops.painite.fence
+
+    def hook(_mod, _inp, out):
+        return tuple(fence(t) for t in out) if isinstance(out, tuple) else fence(out)
+
+    for p in paths:
+        net.get_submodule(p).register_forward_hook(hook)
+    return [f"engines split after {', '.join(paths)}"]
+
+
+def build(model, shape: tuple, precision: str, typing: str, split_after: tuple = ()):
     """Torch-TensorRT program for the model's bare network. Returns (module, input dtype, notes)."""
     import torch  # noqa: PLC0415
     import torch_tensorrt  # noqa: PLC0415
@@ -62,16 +97,19 @@ def build(model, shape: tuple, precision: str, typing: str):
     net = copy.deepcopy(model.accel_module())
     kw = dict(ir="dynamo", min_block_size=1, truncate_double=True, workspace_size=8 << 30,
               cache_built_engines=False, reuse_cached_engines=False)
+    split_notes = split_at(torch, net, split_after)
+    if split_after:
+        kw["torch_executed_ops"] = {FENCE}
     if typing == "strong":
         # The network cast to the precision in PyTorch; TensorRT keeps every tensor's type as traced.
         dt = torch.float16 if precision == "fp16" else torch.float32
         net = net.to(dt).eval()
-        notes = export_prep(net, shape)
+        notes = export_prep(net, shape) + split_notes
         trt = torch_tensorrt.compile(net, inputs=[torch_tensorrt.Input(shape, dtype=dt)],
                                      use_explicit_typing=True, **kw)
         return trt, dt, notes
     net = net.float().eval()
-    notes = export_prep(net, shape)
+    notes = export_prep(net, shape) + split_notes
     precisions = {torch.float32} if precision == "fp32" else {torch.float16, torch.float32}
     trt = torch_tensorrt.compile(net, inputs=[torch_tensorrt.Input(shape, dtype=torch.float32)],
                                  enabled_precisions=precisions, **kw)
@@ -84,6 +122,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--shape", required=True)
     ap.add_argument("--precision", choices=("fp16", "fp32"), default="fp16")
     ap.add_argument("--typing", choices=("weak", "strong"), default="weak")
+    ap.add_argument("--split-after", default="", help="comma-separated submodules whose output ends an engine")
     ap.add_argument("--out", required=True, type=Path)
     ap.add_argument("--record", required=True, type=Path)
     ap.add_argument("--min-psnr", type=float, default=None)
@@ -95,9 +134,12 @@ def main(argv: list[str] | None = None) -> int:
     from .manifest import Manifest  # noqa: PLC0415
 
     shape = tuple(int(v) for v in args.shape.split(","))
+    split = tuple(p for p in args.split_after.split(",") if p)
     manifest = Manifest.load(args.model_dir / "manifest.json")
-    record = {"model": manifest.id, "spec": {"backend": "tensorrt", "precision": args.precision,
-                                             "typing": args.typing}, "shape": list(shape), "at": time.time()}
+    spec = {"backend": "tensorrt", "precision": args.precision, "typing": args.typing}
+    if split:
+        spec["split_after"] = list(split)
+    record = {"model": manifest.id, "spec": spec, "shape": list(shape), "at": time.time()}
     try:
         import torch  # noqa: PLC0415
         import torch_tensorrt  # noqa: PLC0415
@@ -106,7 +148,7 @@ def main(argv: list[str] | None = None) -> int:
         model.device = "cuda"
         model.load()
         t0 = time.perf_counter()
-        trt, in_dtype, notes = build(model, shape, args.precision, args.typing)
+        trt, in_dtype, notes = build(model, shape, args.precision, args.typing, split)
         record["build_s"] = round(time.perf_counter() - t0, 1)
         record["notes"] = notes
         x = torch.rand(shape, device="cuda", dtype=in_dtype)

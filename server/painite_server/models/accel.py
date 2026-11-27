@@ -7,14 +7,23 @@ or a list tried in order (PyTorch is always the last resort):
 
     "accel": {"backend": "tensorrt", "precision": "fp16"}   # TensorRT, FP16 (weakly typed)
     "accel": {"backend": "tensorrt", "precision": "fp16", "typing": "strong"}
+    "accel": {"backend": "tensorrt", "split_after": ["net.decoder.de_block_6"]}  # two engines
     "accel": {"backend": "compile"}                          # torch.compile
     "accel": [{"backend": "tensorrt"}, {"backend": "compile"}]  # TensorRT, else torch.compile
     "accel": {"backend": "pytorch"}                          # (or no key) plain PyTorch
 
 A candidate that fails its build or its output check is recorded, and the
 next one is tried; on the next start, recorded failures are skipped straight
-away. (Stripformer's TensorRT FP16 engine is wrong on a GB10 but fine on an
-RTX 4070, so unblur_motion lists TensorRT first and torch.compile second.)
+away.
+
+`split_after` names submodules (paths in the model's `accel_module()`) whose
+output ends one TensorRT engine and starts the next: the network is built as
+several engines with a no-op PyTorch op (`painite::fence`) between them, so
+TensorRT cannot fuse across that point. Stripformer needs this on a GB10: as one
+FP16 engine, TensorRT (optimization level 2 and up) fuses the decoder's
+attention blocks with its full-resolution conv tail and computes the tail
+wrong (24 dB, no error raised). Split after the last attention block, both
+engines are correct (77 dB vs FP32) and cost ~4% over one engine.
 
 An installed manifest without the key takes it from the server's catalog entry
 for the same model id, so models installed before this feature need no re-pull.
@@ -155,13 +164,22 @@ class Spec:
     backend: str  # tensorrt | compile
     precision: str = "fp16"  # tensorrt only
     typing: str = "weak"  # tensorrt only: weak (TensorRT picks per-layer precision) | strong (.half() network)
+    split_after: tuple[str, ...] = ()  # tensorrt only: submodules whose output ends an engine
 
     @property
     def label(self) -> str:
         """The backend's name in status output and tile cache keys."""
         if self.backend == "tensorrt":
-            return f"tensorrt-{self.precision}" + ("-strong" if self.typing == "strong" else "")
+            return f"tensorrt-{self.precision}" + ("-strong" if self.typing == "strong" else "") + \
+                ("-split" if self.split_after else "")
         return self.backend
+
+    def as_key(self) -> dict:
+        """The spec for cache keys; a spec without a split keys as it did before splits existed."""
+        d = asdict(self)
+        if not self.split_after:
+            del d["split_after"]
+        return d
 
 
 def parse_specs(raw: Any) -> tuple[Spec, ...]:
@@ -199,7 +217,10 @@ def parse_spec(raw: Any) -> Spec | None:
     typing = raw.get("typing", "weak")
     if typing not in TYPINGS:
         raise ValueError(f"config.accel.typing must be one of {TYPINGS}")
-    return Spec("tensorrt", precision, typing)
+    split = raw.get("split_after", [])
+    if not isinstance(split, list) or not all(isinstance(p, str) and p for p in split):
+        raise ValueError("config.accel.split_after must be a list of submodule paths")
+    return Spec("tensorrt", precision, typing, tuple(split))
 
 
 def specs_for(manifest, catalog: Callable[[], dict] | None = None) -> tuple[Spec, ...]:
@@ -222,7 +243,7 @@ def cache_key(model_id: str, weights: list[str], config: dict, spec: Spec, shape
     backend and precision, the input shape, and the software and GPU it was
     built with. Engines are not portable across TensorRT versions or GPUs."""
     blob = json.dumps({"format": FORMAT, "model": model_id, "weights": sorted(weights), "config": config,
-                       "spec": asdict(spec), "shape": list(shape), "env": env}, sort_keys=True, default=str)
+                       "spec": spec.as_key(), "shape": list(shape), "env": env}, sort_keys=True, default=str)
     return hashlib.sha256(blob.encode()).hexdigest()[:24]
 
 
@@ -622,6 +643,7 @@ class Accelerator:
             cmd = [sys.executable, "-m", "painite_server.models.accel_build", "--model-dir",
                    str(model.accel_model_dir), "--shape", ",".join(map(str, self.shape)),
                    "--precision", self.spec.precision, "--typing", self.spec.typing,
+                   *(["--split-after", ",".join(self.spec.split_after)] if self.spec.split_after else []),
                    "--out", str(engine), "--record", str(rec_path), "--min-psnr", str(min_psnr())]
             log.info("accel: building %s engine for %s (limit %.0f s)", self.spec.label, self.model_id,
                      build_timeout_s())
@@ -656,6 +678,9 @@ class Accelerator:
         try:
             import torch_tensorrt  # noqa: PLC0415, F401 - registers the TensorRT runtime ops
 
+            from .accel_build import register_fence  # noqa: PLC0415
+
+            register_fence(torch)  # split engines call it between them
             mod = torch.export.load(str(engine)).module()
             in_dtype = torch.float16 if rec.get("input_dtype") == "float16" else torch.float32
 

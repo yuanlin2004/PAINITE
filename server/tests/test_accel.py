@@ -53,8 +53,11 @@ def test_parse_spec():
     assert accel.parse_spec({"backend": "tensorrt"}) == accel.Spec("tensorrt", "fp16", "weak")
     assert accel.parse_spec({"backend": "tensorrt", "precision": "fp32", "typing": "strong"}).label == \
         "tensorrt-fp32-strong"
+    split = accel.parse_spec({"backend": "tensorrt", "split_after": ["net.decoder.de_block_6"]})
+    assert split.split_after == ("net.decoder.de_block_6",) and split.label == "tensorrt-fp16-split"
     for bad in ({"backend": "tensorrt", "precision": "bf16"}, {"backend": "onnx"},
-                {"backend": "tensorrt", "typing": "loose"}, ["tensorrt"]):
+                {"backend": "tensorrt", "typing": "loose"}, ["tensorrt"],
+                {"backend": "tensorrt", "split_after": "net.decoder"}, {"backend": "tensorrt", "split_after": [""]}):
         with pytest.raises(ValueError):
             accel.parse_spec(bad)
 
@@ -70,12 +73,12 @@ def test_parse_specs_preference_list():
 
 
 def test_catalog_defaults_follow_the_evaluation():
-    """TensorRT FP16 for the CNN/GAN ops; Stripformer tries TensorRT FP16 (fine
-    on an RTX 4070, silently wrong on a GB10) and then torch.compile; plain
-    PyTorch for the face model."""
+    """TensorRT FP16 for the CNN/GAN ops; Stripformer tries TensorRT FP16 split
+    into two engines (one engine is silently wrong on a GB10) and then
+    torch.compile; plain PyTorch for the face model."""
     want = {
         "denoise": ["tensorrt-fp16"], "sharpen": ["tensorrt-fp16"], "upscale2x": ["tensorrt-fp16"],
-        "unblur_focus": ["tensorrt-fp16"], "unblur_motion": ["tensorrt-fp16", "compile"], "face": [],
+        "unblur_focus": ["tensorrt-fp16"], "unblur_motion": ["tensorrt-fp16-split", "compile"], "face": [],
     }
     for m in mf.catalog().values():
         assert [s.label for s in accel.parse_specs(m.config.get("accel"))] == want[m.operation], m.id
@@ -103,6 +106,7 @@ def test_cache_key_changes_with_everything_that_invalidates_an_engine():
         {"config": {"dtype": "fp32"}},
         {"spec": accel.Spec("tensorrt", "fp32")},
         {"spec": accel.Spec("tensorrt", "fp16", "strong")},
+        {"spec": accel.Spec("tensorrt", "fp16", "weak", ("net.decoder",))},
         {"shape": (1, 3, 384, 384)},
         {"env": {**env, "tensorrt": "10.14.0"}},
         {"env": {**env, "gpu": "NVIDIA H100", "sm": "9.0"}},
@@ -110,6 +114,22 @@ def test_cache_key_changes_with_everything_that_invalidates_an_engine():
     ]
     keys = {accel.cache_key(**{**base, **c}) for c in changes}
     assert k not in keys and len(keys) == len(changes)
+    assert "split_after" not in spec.as_key()  # engines built before splits existed keep their keys
+
+
+def test_split_at_fences_submodule_outputs():
+    torch = pytest.importorskip("torch")
+    from painite_server.models import accel_build
+
+    net = torch.nn.Sequential(torch.nn.Conv2d(3, 4, 3, padding=1), torch.nn.LeakyReLU(0.2),
+                              torch.nn.Conv2d(4, 3, 3, padding=1)).eval()
+    x = torch.rand(1, 3, 8, 8)
+    with torch.no_grad():
+        want = net(x)
+        assert accel_build.split_at(torch, net, ["1"]) == ["engines split after 1"]
+        assert torch.equal(net(x), want)  # the fence is an identity
+    graph = torch.export.export(net, (x,)).graph
+    assert [n.target for n in graph.nodes if "fence" in str(n.target)] == [torch.ops.painite.fence.default]
 
 
 # Golden tiles and the check -------------------------------------------------
@@ -500,7 +520,7 @@ def install(data_dir: Path, model_id: str, extra_config: dict | None = None) -> 
 @pytest.mark.parametrize(("model_id", "tile", "overlap", "window", "label"), [
     (SCUNET, 512, 64, 640, "tensorrt-fp16"),
     (SCUNET, 256, 32, 384, "tensorrt-fp16"),
-    ("unblur_motion/stripformer-realblurj@1.0.0", 512, 64, 640, "tensorrt-fp16"),
+    ("unblur_motion/stripformer-realblurj@1.0.0", 512, 64, 640, "tensorrt-fp16-split"),
     ("unblur_focus/lakdnet-defocus-lfdpdd-s@1.0.0", 500, 64, 632, "tensorrt-fp16"),  # padded to 8
 ])
 def test_registry_attaches_accelerators(tmp_path, model_id, tile, overlap, window, label):

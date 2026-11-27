@@ -28,7 +28,8 @@
     "accel": [
       {
         "backend": "tensorrt",
-        "precision": "fp16"
+        "precision": "fp16",
+        "split_after": ["net.decoder.de_block_6"]
       },
       {
         "backend": "compile"

@@ -34,10 +34,11 @@ start-up (about 5 minutes the first time, then loaded from
 `PAINITE_ACCEL` (`auto`, `off`, `tensorrt` or `compile`),
 `PAINITE_ACCEL_BUILD_TIMEOUT_S` (900), `PAINITE_ACCEL_MIN_PSNR` (50). A model can
 list several backends to try in order (unblur_motion: TensorRT, then
-torch.compile). Failed builds are recorded and skipped on later starts, except
-out-of-memory and time-limit failures, which get one more try. To retry
-everything, start once with `PAINITE_ACCEL_RETRY=1`, or delete the engines
-directory.
+torch.compile), and can split its TensorRT build into several engines at named
+submodules (`split_after`; Stripformer needs this on a GB10). Failed builds are
+recorded and skipped on later starts, except out-of-memory and time-limit
+failures, which get one more try. To retry everything, start once with
+`PAINITE_ACCEL_RETRY=1`, or delete the engines directory.
 See `painite_server/models/accel.py`.
 
 ```sh
